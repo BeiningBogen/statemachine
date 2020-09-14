@@ -1,5 +1,6 @@
 plugins {
     kotlin("multiplatform") version "1.4.10"
+    `maven-publish`
 }
 group = "no.beiningbogen"
 version = "0.1.0"
@@ -8,6 +9,19 @@ repositories {
     mavenCentral()
     jcenter()
     google()
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/beiningbogen/statemachine")
+            credentials {
+                username = project.extra["gpr.user"].toString()
+                password = project.extra["gpr.key"].toString()
+            }
+        }
+    }
 }
 
 kotlin {
