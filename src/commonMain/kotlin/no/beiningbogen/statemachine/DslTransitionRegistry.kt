@@ -32,16 +32,16 @@ class DslTransitionRegistry {
 
     /**
      * Retrieves a matching [DslTransition].
-     * @param otherStateType: The state type to look for in the registry.
-     * @param otherEventType: The event type to look for in the registry.
+     * @param stateType: The state type to look for in the registry.
+     * @param eventType: The event type to look for in the registry.
      * @return A [DslTransition] if any of the one registered matches the
      * pair of state and event type passed as parameters, otherwise null.
      */
     internal fun <T : Event> findTransition(
-        otherStateType: KClass<out State>,
-        otherEventType: KClass<out Event>
+        stateType: KClass<out State>,
+        eventType: KClass<out Event>
     ): DslTransition<T>? {
-        val key = registry.keys.firstOrNull { it.matches(otherStateType, otherEventType) } ?: return null
+        val key = registry.keys.firstOrNull { it.matches(stateType, eventType) } ?: return null
         return registry[key] as DslTransition<T>
     }
 }
