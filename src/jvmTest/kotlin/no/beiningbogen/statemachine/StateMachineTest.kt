@@ -26,7 +26,15 @@ class StateMachineTest {
         itemRepository = mock()
 
         stateMachine = StateMachine.create {
-            state<State.Initial> {
+            /**
+             * Define on which states the transitions register inside the lambda should applied to.
+             */
+            states(State.Initial, AppState.AnotherState) {
+
+                /**
+                 * Register a lambda triggered by a specific event executing some suspending
+                 * code and returning a new state.
+                 */
                 on<AppEvent.ShowLoading> {
                     AppState.Loading
                 }

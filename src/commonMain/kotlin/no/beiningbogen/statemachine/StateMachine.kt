@@ -110,6 +110,25 @@ class DslStateMachineBuilder {
     }
 
     /**
+     * Define the state on which the event declared in the lambda parameter should
+     * be applied on. For example :
+     *
+     * state<State.SomeState> {
+     *     ...
+     * }
+     *
+     * @param T : The given State to use in the lambda parameter.
+     * @param block : the lambda defining which event(s) that can be applied
+     * on the given state.
+     */
+    fun states(vararg states: State, block: DslStateBuilder.() -> Unit) {
+        for (state in states) {
+            val builder = DslStateBuilder(state::class, registry)
+            block(builder)
+        }
+    }
+
+    /**
      * Build the state machine.
      */
     fun build(): StateMachine {
