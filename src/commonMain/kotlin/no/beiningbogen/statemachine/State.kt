@@ -1,24 +1,10 @@
 package no.beiningbogen.statemachine
 
 /**
- * Base class for any states the state machine should cover.
- * It must be extended in clients, for example :
- *
- * sealed class AppState : State() {
- *     object Loading : AppState()
- *     object Loaded : AppState()
- * }
+ * Interface to be implemented by the developer's class representing the state of the a state machine.
+ * This is use internally for checking if the current state of the state machine represent an error
+ * state when the developer calls [StateMachine.retry].
  */
-
-abstract class State {
-
-    /**
-     * The default state for any state machine created with the dsl.
-     */
-    object Initial : State()
-
-    /**
-     * The state used when something wrong occurred with the state machine.
-     */
-    data class Error(val error: StateMachineError) : State()
+interface State {
+    val isErrorState: Boolean
 }

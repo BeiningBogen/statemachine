@@ -16,7 +16,7 @@ class StateMachineTest {
     @get:Rule
     val coroutineTestRule = CoroutineTestRule()
 
-    private lateinit var stateMachine: StateMachine
+    private lateinit var stateMachine: StateMachine<AppState, AppEvent>
     private lateinit var items: List<Item>
     private lateinit var itemRepository: FakeItemRepository
 
@@ -25,11 +25,11 @@ class StateMachineTest {
         items = mock()
         itemRepository = mock()
 
-        stateMachine = StateMachine.create {
+        stateMachine = StateMachine.create(AppState.Initial) {
             /**
              * Define on which states the transitions register inside the lambda should applied to.
              */
-            states(State.Initial, AppState.AnotherState) {
+            states(AppState.Initial, AppState.AnotherState) {
 
                 /**
                  * Register a lambda triggered by a specific event executing some suspending
@@ -49,7 +49,7 @@ class StateMachineTest {
                     val data = itemRepository.search(it.name, it.page)
                     when (data) {
                         is Either.Success -> AppState.Loaded(data)
-                        is Either.Failure -> State.Error(AppError.NetworkError)
+                        is Either.Failure -> AppState.Error.NetworkError
                     }
                 }
             }
@@ -58,7 +58,7 @@ class StateMachineTest {
 
     @Test
     fun `initial state should be State_Initial`() {
-        assertEquals(State.Initial, stateMachine.state)
+        assertEquals(AppState.Initial, stateMachine.state)
     }
 
     @Test
@@ -95,14 +95,13 @@ class StateMachineTest {
     @Test
     fun `should transition to Error and State_Loaded after retry`() = coroutineTestRule.runBlockingTest {
         whenever(itemRepository.search("name", 0))
-            .thenReturn(Either.Failure(AppError.NetworkError), Either.Success(items))
+            .thenReturn(Either.Failure(AppState.Error.NetworkError), Either.Success(items))
 
         stateMachine.state = AppState.Loading
 
         val errorState = stateMachine.onEvent(AppEvent.SearchItemByName("name", 0))
         assertEquals(errorState, stateMachine.state)
-        assertTrue(errorState is State.Error)
-        assertEquals(AppError.NetworkError, errorState.error)
+        assertEquals(AppState.Error.NetworkError, errorState)
 
         val newState = stateMachine.retry(AppEvent.SearchItemByName("name", 0), 1000)
         assertEquals(newState, stateMachine.state)
@@ -113,7 +112,7 @@ class StateMachineTest {
 }
 
 private interface FakeItemRepository {
-    suspend fun search(name: String, page: Int): Either<List<Item>, AppError>
+    suspend fun search(name: String, page: Int): Either<List<Item>, AppState.Error.NetworkError>
 }
 
 private sealed class Either<out A, out B> {

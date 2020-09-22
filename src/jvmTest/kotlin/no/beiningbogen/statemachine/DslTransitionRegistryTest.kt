@@ -16,7 +16,7 @@ class DslTransitionRegistryTest {
     @get:Rule
     val coroutineTestRule = CoroutineTestRule()
 
-    private lateinit var registry: DslTransitionRegistry
+    private lateinit var registry: DslTransitionRegistry<AppState, AppEvent>
     private lateinit var items: List<Item>
 
     @Before
@@ -27,15 +27,15 @@ class DslTransitionRegistryTest {
 
     @Test
     fun `add transitions to the registry and fetch them`() = coroutineTestRule.runBlockingTest {
-        val initialState = State.Initial
+        val initialState = AppState.Initial
         val showLoadingEvent = AppEvent.ShowLoading
-        val showLoadingTransition = DslTransition<AppEvent.ShowLoading> { AppState.Loading }
+        val showLoadingTransition = DslTransition<AppState.Loading, AppEvent.ShowLoading> { AppState.Loading }
 
         registry.registerTransition(initialState::class, showLoadingEvent::class, showLoadingTransition)
 
         val loadingState = AppState.Loading
         val loadDataEvent = AppEvent.LoadData
-        val dataLoadedTransition = DslTransition<AppEvent.LoadData> { AppState.Loaded(items) }
+        val dataLoadedTransition = DslTransition<AppState.Loaded<List<Item>>, AppEvent.LoadData> { AppState.Loaded(items) }
 
         registry.registerTransition(loadingState::class, loadDataEvent::class, dataLoadedTransition)
 

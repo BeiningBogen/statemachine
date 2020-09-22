@@ -2,27 +2,32 @@ package no.beiningbogen.statemachine
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import no.beiningbogen.statemachine.error.CannotApplyEventError
+import no.beiningbogen.statemachine.error.CannotRetryError
 import kotlin.reflect.KClass
 
 /**
- * The main classes used by the clients to create a new state machine.
+ * The main classes used by the developer to create a new state machine.
  */
 
 @ExperimentalCoroutinesApi
-class StateMachine(private val registry: DslTransitionRegistry) {
+class StateMachine<STATE : State, EVENT : Any>(
+    private val initialState: STATE,
+    private val registry: DslTransitionRegistry<STATE, EVENT>
+) {
 
-    private val _state = mutableListOf<State>().apply {
-        add(State.Initial)
+    private val _state = mutableListOf<STATE>().apply {
+        add(initialState)
     }
 
     /**
-     * The current state of the state machine, [State.Initial] is set
-     * by default when the state machine is created.
+     * The current state of the state machine, it is set to
+     * a default value when the state machine is created.
      * Setting this variable will make the state machine jump to the
      * specified state without any checks. It should be used only when
      * testing.
      */
-    var state: State
+    var state: STATE
         get() = _state[_state.lastIndex]
         set(value) {
             _state.add(value)
@@ -31,32 +36,32 @@ class StateMachine(private val registry: DslTransitionRegistry) {
     /**
      * Triggers a transition to a new state.
      * @param event: the event to use to trigger a transition.
-     * @return the [State] resulting of the transition.
+     * @return the [STATE] resulting of the transition.
      */
-    suspend fun <T : Event> onEvent(event: T): State {
+    suspend fun <T : EVENT> onEvent(event: T): STATE {
         return onEvent(event, state::class)
     }
 
     /**
      * Retry to apply an event with an eventual delay.
      * It can be used only if the current state of the state machine
-     * extends [State.Error]
+     * returns true on [State.isErrorState]
      * @param event: the event to use to trigger a transition.
      * @param delay: the delay to wait before retrying to apply the event.
-     * @return the [State] resulting of the transition.
+     * @return the [STATE] resulting of the transition.
      */
-    suspend fun <T : Event> retry(event: T, delay: Long = 0): State {
-        if (state !is State.Error) return State.Error(StateMachineError.CannotRetry)
+    suspend fun <T : EVENT> retry(event: T, delay: Long = 0): STATE {
+        if (!state.isErrorState) throw CannotRetryError
 
         delay(delay)
         return onEvent(event, _state[_state.lastIndex - 1]::class)
     }
 
-    private suspend fun <T : Event> onEvent(event: T, stateType: KClass<out State>): State {
+    private suspend fun <T : EVENT> onEvent(event: T, stateType: KClass<out STATE>): STATE {
         val dslTransition = registry.findTransition<T>(stateType, event::class)
 
         val newState = dslTransition?.block?.invoke(event)
-            ?: State.Error(StateMachineError.CannotApplyEvent(state, event))
+            ?: throw CannotApplyEventError(state, event)
 
         state = newState
 
@@ -71,57 +76,58 @@ class StateMachine(private val registry: DslTransitionRegistry) {
          * @param configuration: a [DslStateMachineBuilder] to register states
          * on which events can be applied.
          */
-        fun create(configuration: DslStateMachineBuilder.() -> Unit): StateMachine {
-            val builder = DslStateMachineBuilder()
+        fun <STATE : State, EVENT : Any> create(
+            initialState: STATE,
+            configuration: DslStateMachineBuilder<STATE, EVENT>.() -> Unit
+        ): StateMachine<STATE, EVENT> {
+            val builder = DslStateMachineBuilder<STATE, EVENT>()
             configuration(builder)
-            return builder.build()
+            return builder.build(initialState)
         }
     }
 }
 
 /**
- * Builder class to register the different states the state machine covers.
+ * Builder class to register the different states covered by the state machine.
  */
 
 @ExperimentalCoroutinesApi
-class DslStateMachineBuilder {
+class DslStateMachineBuilder<STATE : State, EVENT : Any> {
 
     /**
      * The registry containing all the different transitions
      * between states covered by the state machine.
      */
-    val registry = DslTransitionRegistry()
+    val registry = DslTransitionRegistry<STATE, EVENT>()
 
     /**
-     * Define the state on which the event declared in the lambda parameter should
+     * Define the state on which the transitions declared in the lambda passed as parameter should
      * be applied on. For example :
      *
-     * state<State.SomeState> {
+     * state<SomeState> {
      *     ...
      * }
      *
-     * @param T : The given State to use in the lambda parameter.
-     * @param block : the lambda defining which event(s) that can be applied
-     * on the given state.
+     * @param T : The given [STATE] to use in the lambda parameter.
+     * @param block : the lambda defining transitions for the state machine.
      */
-    inline fun <reified T : State> state(block: DslStateBuilder.() -> Unit) {
+    inline fun <reified T : STATE> state(block: DslStateBuilder<STATE, EVENT>.() -> Unit) {
         val builder = DslStateBuilder(T::class, registry)
         block(builder)
     }
 
     /**
-     * Define the state on which the event declared in the lambda parameter should
+     * Define the states on which the transitions declared in the lambda passed as parameter should
      * be applied on. For example :
      *
-     * state<State.SomeState> {
+     * state(SomeState, SomeOtherState) {
      *     ...
      * }
      *
-     * @param T : The given State to use in the lambda parameter.
-     * @param block : the lambda defining which event(s) that can be applied
-     * on the given state.
+     * @param states : an array/vararg of [STATE] on which the transitions will operate.
+     * @param block : the lambda defining transitions for the state machine.
      */
-    fun states(vararg states: State, block: DslStateBuilder.() -> Unit) {
+    fun states(vararg states: STATE, block: DslStateBuilder<STATE, EVENT>.() -> Unit) {
         for (state in states) {
             val builder = DslStateBuilder(state::class, registry)
             block(builder)
@@ -131,37 +137,36 @@ class DslStateMachineBuilder {
     /**
      * Build the state machine.
      */
-    fun build(): StateMachine {
-        return StateMachine(registry)
+    fun build(initialState: STATE): StateMachine<STATE, EVENT> {
+        return StateMachine(initialState, registry)
     }
 }
 
 /**
- * Builder class to register different events that can be applied to a given state.
+ * Builder class to register different transitions.
  */
 
 @ExperimentalCoroutinesApi
-class DslStateBuilder(
-    val stateType: KClass<out State>,
-    val registry: DslTransitionRegistry
+class DslStateBuilder<STATE : State, EVENT : Any>(
+    val stateType: KClass<out STATE>,
+    val registry: DslTransitionRegistry<STATE, EVENT>
 ) {
 
     /**
      * Define the event triggering the lambda used for transitioning the
      * state machine to a new state. For example :
      *
-     * state<State.SomeState> {
-     *     on<Event.SomeEvent< {
-     *         State.SomeOtherState
+     * state<SomeState> {
+     *     on<SomeEvent> {
+     *         SomeOtherState
      *     }
      * }
      *
-     * @param T : The given State to use in the lambda parameter.
-     * @param block : the lambda defining which event(s) that can be applied
-     * on the given state.
+     * @param T : The given [STATE] to use in the lambda parameter.
+     * @param block : the lambda defining a specific transition.
      */
-    inline fun <reified U : Event> on(noinline block: suspend (U) -> State) {
+    inline fun <reified T : EVENT> on(noinline block: suspend (T) -> STATE) {
         val transition = DslTransition(block)
-        registry.registerTransition(stateType, U::class, transition)
+        registry.registerTransition(stateType, T::class, transition)
     }
 }

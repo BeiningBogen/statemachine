@@ -7,12 +7,12 @@ import kotlin.reflect.KClass
  * If we only store a list of [DslTransition], we have no way of finding a
  * specific transition later on. So the role of [DslTransitionMatcher] is to
  * tell if the [DslTransition] associated with it corresponds to a given
- * state/event pair.
+ * [STATE]/[EVENT] pair.
  */
 
-internal class DslTransitionMatcher(
-    private val stateType: KClass<out State>,
-    private val eventType: KClass<out Event>
+internal class DslTransitionMatcher<STATE : State, EVENT : Any>(
+    private val stateType: KClass<out STATE>,
+    private val eventType: KClass<out EVENT>
 ) {
 
     /**
@@ -24,8 +24,8 @@ internal class DslTransitionMatcher(
      * matcher's event type.
      */
     internal fun matches(
-        otherStateType: KClass<out State>,
-        otherEventType: KClass<out Event>
+        otherStateType: KClass<out STATE>,
+        otherEventType: KClass<out EVENT>
     ): Boolean {
         return stateType == otherStateType && eventType == otherEventType
     }

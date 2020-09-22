@@ -3,14 +3,13 @@ package no.beiningbogen.statemachine
 /**
  * A simple object holding the lambda creating a new state.
  * This class should not be use at any point by devs to create a
- * state machine. It is useful only internally.
+ * state machine. It is only useful internally.
  */
 
-class DslTransition<U : Event>(
+class DslTransition<out STATE : State, EVENT : Any>(
 
     /**
-     * Lambda creating a State object.
-     * it takes a parameter extending [Event].
+     * The lambda creating a new [STATE] object based on the [EVENT] parameter.
      */
-    val block: suspend (U) -> State
+    val block: suspend (EVENT) -> STATE
 )
