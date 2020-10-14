@@ -3,7 +3,7 @@ plugins {
     id("maven-publish")
 }
 group = "no.beiningbogen"
-version = "0.2.1"
+version = "0.2.2"
 
 repositories {
     mavenCentral()
@@ -40,13 +40,7 @@ kotlin {
         }
     }
 
-    val iOSTarget: (String, org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget.() -> Unit) -> org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget =
-        if (System.getenv("SDK_NAME")?.startsWith("iphoneos") == true)
-            ::iosArm64
-        else
-            ::iosX64
-
-    iOSTarget("ios") {
+    ios {
         binaries {
             framework {
                 baseName = "SharedCode"
