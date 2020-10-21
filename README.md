@@ -2,6 +2,17 @@
 
 A state machine dsl for kotlin multi-platform project
 
+## Gradle
+
+Inside the `repositories` block from your `build.gradle` file : 
+```
+maven { url = uri("https://maven.pkg.jetbrains.space/beiningbogen/p/stmn/maven") }
+```
+Inside `dependencies`
+```
+implementation "no.beiningbogen:StateMachine:0.2.2"
+```
+
 ## Usage 
 
 ```
