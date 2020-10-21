@@ -6,7 +6,7 @@ package no.beiningbogen.statemachine
  * state machine. It is only useful internally.
  */
 
-class DslTransition<out STATE : State, EVENT : Any>(
+class DslTransition<out STATE, EVENT : Any>(
 
     /**
      * The lambda creating a new [STATE] object based on the [EVENT] parameter.

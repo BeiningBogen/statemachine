@@ -1,7 +1,6 @@
 package no.beiningbogen.statemachine
 
-sealed class AppState : State {
-    override val isErrorState = false
+sealed class AppState {
 
     object Initial : AppState()
 
@@ -10,7 +9,6 @@ sealed class AppState : State {
     data class Loaded<T>(val data: T) : AppState()
 
     sealed class Error : AppState() {
-        override val isErrorState = true
         abstract val message: String
 
         object NetworkError : Error() {

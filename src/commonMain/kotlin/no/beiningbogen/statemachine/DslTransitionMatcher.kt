@@ -10,7 +10,7 @@ import kotlin.reflect.KClass
  * [STATE]/[EVENT] pair.
  */
 
-internal class DslTransitionMatcher<STATE : State, EVENT : Any>(
+internal class DslTransitionMatcher<STATE : Any, EVENT : Any>(
     private val stateType: KClass<out STATE>,
     private val eventType: KClass<out EVENT>
 ) {

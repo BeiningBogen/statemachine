@@ -8,7 +8,7 @@ import kotlin.reflect.KClass
  */
 
 @ExperimentalCoroutinesApi
-class DslTransitionRegistry<STATE : State, EVENT : Any> {
+class DslTransitionRegistry<STATE : Any, EVENT : Any> {
 
     /**
      * A map of [DslTransition] associated with [DslTransitionMatcher] as its key.

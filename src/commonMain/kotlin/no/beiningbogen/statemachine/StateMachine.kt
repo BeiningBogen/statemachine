@@ -3,7 +3,6 @@ package no.beiningbogen.statemachine
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import no.beiningbogen.statemachine.error.CannotApplyEventError
-import no.beiningbogen.statemachine.error.CannotRetryError
 import kotlin.reflect.KClass
 
 /**
@@ -11,7 +10,7 @@ import kotlin.reflect.KClass
  */
 
 @ExperimentalCoroutinesApi
-class StateMachine<STATE : State, EVENT : Any>(
+class StateMachine<STATE : Any, EVENT : Any>(
     private val initialState: STATE,
     private val registry: DslTransitionRegistry<STATE, EVENT>
 ) {
@@ -43,16 +42,12 @@ class StateMachine<STATE : State, EVENT : Any>(
     }
 
     /**
-     * Retry to apply an event with an eventual delay.
-     * It can be used only if the current state of the state machine
-     * returns true on [State.isErrorState]
+     * Call [onEvent] after a specified delay.
      * @param event: the event to use to trigger a transition.
      * @param delay: the delay to wait before retrying to apply the event.
      * @return the [STATE] resulting of the transition.
      */
     suspend fun <T : EVENT> retry(event: T, delay: Long = 0): STATE {
-        if (!state.isErrorState) throw CannotRetryError
-
         delay(delay)
         return onEvent(event, _state[_state.lastIndex - 1]::class)
     }
@@ -76,7 +71,7 @@ class StateMachine<STATE : State, EVENT : Any>(
          * @param configuration: a [DslStateMachineBuilder] to register states
          * on which events can be applied.
          */
-        fun <STATE : State, EVENT : Any> create(
+        fun <STATE : Any, EVENT : Any> create(
             initialState: STATE,
             configuration: DslStateMachineBuilder<STATE, EVENT>.() -> Unit
         ): StateMachine<STATE, EVENT> {
@@ -92,7 +87,7 @@ class StateMachine<STATE : State, EVENT : Any>(
  */
 
 @ExperimentalCoroutinesApi
-class DslStateMachineBuilder<STATE : State, EVENT : Any> {
+class DslStateMachineBuilder<STATE : Any, EVENT : Any> {
 
     /**
      * The registry containing all the different transitions
@@ -147,7 +142,7 @@ class DslStateMachineBuilder<STATE : State, EVENT : Any> {
  */
 
 @ExperimentalCoroutinesApi
-class DslStateBuilder<STATE : State, EVENT : Any>(
+class DslStateBuilder<STATE : Any, EVENT : Any>(
     val stateType: KClass<out STATE>,
     val registry: DslTransitionRegistry<STATE, EVENT>
 ) {
