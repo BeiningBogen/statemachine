@@ -40,6 +40,11 @@ class StateMachineTest {
                 }
             }
 
+            /**
+             * In order to use states requiring parameters, the previous transition could have been register with
+             * states(AppState.Initial::class, AppState.AnotherState::class)
+             */
+
             state<AppState.Loading> {
                 on<AppEvent.LoadData> {
                     AppState.Loaded(items)

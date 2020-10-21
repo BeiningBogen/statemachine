@@ -119,12 +119,35 @@ class DslStateMachineBuilder<STATE : Any, EVENT : Any> {
      *     ...
      * }
      *
+     * This methode will work for states defined as object since they don't require
+     * parameters. For declaring multiple states requiring parameters, see [states]
+     *
      * @param states : an array/vararg of [STATE] on which the transitions will operate.
      * @param block : the lambda defining transitions for the state machine.
      */
     fun states(vararg states: STATE, block: DslStateBuilder<STATE, EVENT>.() -> Unit) {
         for (state in states) {
             val builder = DslStateBuilder(state::class, registry)
+            block(builder)
+        }
+    }
+
+    /**
+     * Define the states on which the transitions declared in the lambda passed as parameter should
+     * be applied on. For example :
+     *
+     * state(SomeState, SomeOtherState) {
+     *     ...
+     * }
+     *
+     * This methode will work for states defined as object or data classes.
+     *
+     * @param states : an array/vararg of [STATE] on which the transitions will operate.
+     * @param block : the lambda defining transitions for the state machine.
+     */
+    fun states(vararg states: KClass<out STATE>, block: DslStateBuilder<STATE, EVENT>.() -> Unit) {
+        for (state in states) {
+            val builder = DslStateBuilder(state, registry)
             block(builder)
         }
     }
