@@ -10,13 +10,13 @@ maven { url = uri("https://maven.pkg.jetbrains.space/beiningbogen/p/stmn/maven")
 ```
 Inside `dependencies`
 ```
-implementation "no.beiningbogen:StateMachine:0.2.2"
+implementation "no.beiningbogen:StateMachine:0.3.0"
 ```
 
 ## Usage 
 
 ```
-val stateMachine = StateMachine.create {
+val stateMachine = StateMachine.create(State.Initial) {
     state<State.Initial> {
         on<AppEvent.ShowLoading> {
             AppState.Loading
@@ -34,7 +34,6 @@ assertEquals(State.Initial, stateMachine.state)
 
 val loadState = stateMachine.onEvent(AppEvent.ShowLoading)
 assertEquals(AppState.Loading, loadState)
-assertEquals(AppState.Loading, stateMachine.state)
 
 val loadedState = stateMachine.onEvent(AppEvent.LoadData)
 assertEquals(loadedState, stateMachine.state)
