@@ -1,6 +1,5 @@
 package no.beiningbogen.statemachine
 
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import no.beiningbogen.statemachine.error.CannotApplyEventError
 import kotlin.reflect.KClass
@@ -62,7 +61,6 @@ class StateMachine<STATE : Any, EVENT : Any>(
         return newState
     }
 
-    @ExperimentalCoroutinesApi
     companion object {
 
         /**
@@ -85,7 +83,6 @@ class StateMachine<STATE : Any, EVENT : Any>(
  * Builder class to register the different states covered by the state machine.
  */
 
-@ExperimentalCoroutinesApi
 class DslStateMachineBuilder<STATE : Any, EVENT : Any> {
 
     /**
@@ -163,7 +160,6 @@ class DslStateMachineBuilder<STATE : Any, EVENT : Any> {
  * Builder class to register different transitions.
  */
 
-@ExperimentalCoroutinesApi
 class DslStateBuilder<STATE : Any, EVENT : Any>(
     val stateType: KClass<out STATE>,
     val registry: DslTransitionRegistry<STATE, EVENT>
