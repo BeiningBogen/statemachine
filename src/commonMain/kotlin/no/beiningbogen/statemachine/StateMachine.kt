@@ -9,7 +9,6 @@ import kotlin.reflect.KClass
  * The main classes used by the developer to create a new state machine.
  */
 
-@ExperimentalCoroutinesApi
 class StateMachine<STATE : Any, EVENT : Any>(
     private val initialState: STATE,
     private val registry: DslTransitionRegistry<STATE, EVENT>
@@ -53,7 +52,7 @@ class StateMachine<STATE : Any, EVENT : Any>(
     }
 
     private suspend fun <T : EVENT> onEvent(event: T, stateType: KClass<out STATE>): STATE {
-        val dslTransition = registry.findTransition<T>(stateType, event::class)
+        val dslTransition = registry.findTransition(stateType, event::class)
 
         val newState = dslTransition?.block?.invoke(event)
             ?: throw CannotApplyEventError(state, event)

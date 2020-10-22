@@ -1,13 +1,11 @@
 package no.beiningbogen.statemachine
 
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlin.reflect.KClass
 
 /**
  * Stores all the transitions declared by the developer in the state machine dsl.
  */
 
-@ExperimentalCoroutinesApi
 class DslTransitionRegistry<STATE : Any, EVENT : Any> {
 
     /**
@@ -37,7 +35,7 @@ class DslTransitionRegistry<STATE : Any, EVENT : Any> {
      * @return A [DslTransition] if any of the one registered matches the
      * pair of state and event type passed as parameters, otherwise null.
      */
-    internal fun <T : EVENT> findTransition(
+    internal fun findTransition(
         stateType: KClass<out STATE>,
         eventType: KClass<out EVENT>
     ): DslTransition<STATE, EVENT>? {

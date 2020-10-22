@@ -40,7 +40,7 @@ class DslTransitionRegistryTest {
         registry.registerTransition(loadingState::class, loadDataEvent::class, dataLoadedTransition)
 
         val showLoadingFoundTransition =
-            registry.findTransition<AppEvent.ShowLoading>(initialState::class, showLoadingEvent::class)
+            registry.findTransition(initialState::class, showLoadingEvent::class)
         assertNotNull(showLoadingFoundTransition)
 
         val showLoadingResultState = showLoadingFoundTransition.block(showLoadingEvent)
@@ -48,7 +48,7 @@ class DslTransitionRegistryTest {
         assertEquals(AppState.Loading, showLoadingResultState)
 
         val loadingFoundTransition =
-            registry.findTransition<AppEvent.LoadData>(loadingState::class, loadDataEvent::class)
+            registry.findTransition(loadingState::class, loadDataEvent::class)
         assertNotNull(loadingFoundTransition)
 
         val loadingResultState = loadingFoundTransition.block(loadDataEvent)
