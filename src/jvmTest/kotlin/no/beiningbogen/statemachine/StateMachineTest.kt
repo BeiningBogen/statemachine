@@ -1,42 +1,46 @@
 package no.beiningbogen.statemachine
 
+import app.cash.turbine.test
 import com.nhaarman.mockitokotlin2.mock
 import com.nhaarman.mockitokotlin2.whenever
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.TestCoroutineDispatcher
 import kotlinx.coroutines.test.runBlockingTest
+import org.junit.After
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.ExperimentalTime
 
+@ExperimentalTime
 @ExperimentalCoroutinesApi
 class StateMachineTest {
 
-    @get:Rule
-    val coroutineTestRule = CoroutineTestRule()
-
-    private lateinit var stateMachine: StateMachine<AppState, AppEvent>
+    private lateinit var stateMachine: StateMachine<TestStates, AppEvent>
     private lateinit var items: List<Item>
     private lateinit var itemRepository: FakeItemRepository
+
+    private val dispatcher = TestCoroutineDispatcher()
 
     @Before
     fun setUp() {
         items = mock()
         itemRepository = mock()
 
-        stateMachine = StateMachine.create(AppState.Initial) {
+        stateMachine = StateMachine.create(TestStates.Initial, dispatcher) {
             /**
              * Define on which states the transitions register inside the lambda should applied to.
              */
-            states(AppState.Initial, AppState.AnotherState) {
+            states(TestStates.Initial::class, TestStates.Loaded::class) {
 
                 /**
                  * Register a lambda triggered by a specific event executing some suspending
                  * code and returning a new state.
                  */
-                on<AppEvent.ShowLoading> {
-                    AppState.Loading
+                on<AppEvent.ShowLoading> { event, sendChannel ->
+                    sendChannel.send(TestStates.Loading)
                 }
             }
 
@@ -45,82 +49,127 @@ class StateMachineTest {
              * states(AppState.Initial::class, AppState.AnotherState::class)
              */
 
-            state<AppState.Loading> {
-                on<AppEvent.LoadData> {
-                    AppState.Loaded(items)
+            states(TestStates.Loading::class, TestStates.Error::class) {
+                on<AppEvent.LoadData> { event, sendChannel ->
+                    sendChannel.send(TestStates.Loaded(items))
                 }
 
-                on<AppEvent.SearchItemByName> {
-                    val data = itemRepository.search(it.name, it.page)
-                    when (data) {
-                        is Either.Success -> AppState.Loaded(data)
-                        is Either.Failure -> AppState.Error.NetworkError
+                on<AppEvent.SearchItemByName> { event, sendChannel ->
+                    try {
+                        val data = itemRepository.search(event.name, event.page)
+                        sendChannel.send(TestStates.Loaded(data))
+                    } catch (e: Exception) {
+                        sendChannel.send(TestStates.Error(e.localizedMessage))
                     }
                 }
             }
         }
     }
 
-    @Test
-    fun `initial state should be State_Initial`() {
-        assertEquals(AppState.Initial, stateMachine.state)
+    @After
+    fun cleanUp() {
+        stateMachine.destroy()
     }
 
     @Test
-    fun `should transition to State_Loading`() = coroutineTestRule.runBlockingTest {
-        val newState = stateMachine.onEvent(AppEvent.ShowLoading)
-        assertEquals(AppState.Loading, newState)
-        assertEquals(AppState.Loading, stateMachine.state)
+    fun `initial state should be State_Initial`() = dispatcher.runBlockingTest {
+        assertEquals(TestStates.Initial, stateMachine.state.first())
     }
 
     @Test
-    fun `should transition to State_Loaded`() = coroutineTestRule.runBlockingTest {
-        stateMachine.state = AppState.Loading
+    fun `should transition to State_Loading`() = dispatcher.runBlockingTest {
+        stateMachine.state.test {
+            var nextState = expectItem()
+            assertEquals(TestStates.Initial, nextState)
 
-        val nextValue = stateMachine.onEvent(AppEvent.LoadData)
-        assertEquals(nextValue, stateMachine.state)
-        assertTrue(nextValue is AppState.Loaded<*>)
-        assertEquals(items, nextValue.data)
+            stateMachine.onEvent(AppEvent.ShowLoading)
+
+            nextState = expectItem()
+            assertEquals(TestStates.Loading, nextState)
+
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
-    fun `should transition to State_Loaded after search`() = coroutineTestRule.runBlockingTest {
+    fun `should transition to State_Loaded after loading`() = dispatcher.runBlockingTest {
+        stateMachine.state.test {
+            var nextState = expectItem()
+            assertEquals(TestStates.Initial, nextState)
+
+            stateMachine.onEvent(AppEvent.ShowLoading)
+
+            nextState = expectItem()
+            assertEquals(TestStates.Loading, nextState)
+
+            stateMachine.onEvent(AppEvent.LoadData)
+
+            nextState = expectItem()
+            assertTrue(nextState is TestStates.Loaded<*>)
+            assertEquals(items, nextState.data)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `should transition to State_Loaded after search`() = runBlockingTest {
         whenever(itemRepository.search("name", 0))
-            .thenReturn(Either.Success(items))
+            .thenReturn(items)
 
-        stateMachine.state = AppState.Loading
+        stateMachine.state.test {
+            val state = expectItem()
+            assertEquals(TestStates.Initial, state)
 
-        val newState = stateMachine.onEvent(AppEvent.SearchItemByName("name", 0))
-        assertEquals(newState, stateMachine.state)
-        assertTrue(newState is AppState.Loaded<*>)
-        assertTrue(newState.data is Either.Success<*>)
-        assertEquals(items, newState.data.value)
+            stateMachine.onEvent(AppEvent.ShowLoading)
+
+            val state2 = expectItem()
+            assertEquals(TestStates.Loading, state2)
+
+            stateMachine.onEvent(AppEvent.SearchItemByName("name", 0))
+
+            val state3 = expectItem()
+            assertTrue(state3 is TestStates.Loaded<*>)
+            assertEquals(items, state3.data)
+
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
-    fun `should transition to Error and State_Loaded after retry`() = coroutineTestRule.runBlockingTest {
+    fun `should transition to Error and State_Loaded after retry`() = runBlockingTest {
+        val error = Exception("error")
         whenever(itemRepository.search("name", 0))
-            .thenReturn(Either.Failure(AppState.Error.NetworkError), Either.Success(items))
+            .thenThrow(error)
+            .thenReturn(items)
 
-        stateMachine.state = AppState.Loading
+        stateMachine.state.test {
+            val state = expectItem()
+            assertEquals(TestStates.Initial, state)
 
-        val errorState = stateMachine.onEvent(AppEvent.SearchItemByName("name", 0))
-        assertEquals(errorState, stateMachine.state)
-        assertEquals(AppState.Error.NetworkError, errorState)
+            stateMachine.onEvent(AppEvent.ShowLoading)
 
-        val newState = stateMachine.retry(AppEvent.SearchItemByName("name", 0), 1000)
-        assertEquals(newState, stateMachine.state)
-        assertTrue(newState is AppState.Loaded<*>)
-        assertTrue(newState.data is Either.Success<*>)
-        assertEquals(items, newState.data.value)
+            val state2 = expectItem()
+            assertEquals(TestStates.Loading, state2)
+
+            stateMachine.onEvent(AppEvent.SearchItemByName("name", 0))
+
+            val state3 = expectItem()
+            assertTrue(state3 is TestStates.Error)
+
+            stateMachine.onEvent(AppEvent.SearchItemByName("name", 0))
+
+            val state4 = expectItem()
+            assertTrue(state4 is TestStates.Loaded<*>)
+            assertEquals(items, state4.data)
+
+            cancelAndIgnoreRemainingEvents()
+        }
     }
 }
 
 private interface FakeItemRepository {
-    suspend fun search(name: String, page: Int): Either<List<Item>, AppState.Error.NetworkError>
+    @Throws(Exception::class)
+    suspend fun search(name: String, page: Int): List<Item>
 }
 
-private sealed class Either<out A, out B> {
-    data class Success<A>(val value: A) : Either<A, Nothing>()
-    data class Failure<B>(val value: B) : Either<Nothing, B>()
-}

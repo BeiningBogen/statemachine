@@ -3,14 +3,14 @@ package no.beiningbogen.statemachine
 import kotlin.reflect.KClass
 
 /**
- * DslTransitionMatcher is an object used as a key in [DslTransitionRegistry].
- * If we only store a list of [DslTransition], we have no way of finding a
- * specific transition later on. So the role of [DslTransitionMatcher] is to
- * tell if the [DslTransition] associated with it corresponds to a given
+ * DslTransitionMatcher is an object used as a key in [TransitionRegistry].
+ * If we only store a list of [TransitionWrapper], we have no way of finding a
+ * specific transition later on. So the role of [TransitionMatcher] is to
+ * tell if the [TransitionWrapper] associated with it corresponds to a given
  * [STATE]/[EVENT] pair.
  */
 
-internal class DslTransitionMatcher<STATE : Any, EVENT : Any>(
+internal class TransitionMatcher<STATE : Any, EVENT : Any>(
     private val stateType: KClass<out STATE>,
     private val eventType: KClass<out EVENT>
 ) {
