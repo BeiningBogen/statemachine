@@ -16,29 +16,34 @@ implementation "no.beiningbogen:StateMachine:0.3.0"
 ## Usage 
 
 ```
-val stateMachine = StateMachine.create(State.Initial) {
-    state<State.Initial> {
-        on<AppEvent.ShowLoading> {
-            AppState.Loading
-        }
+data class UserProfileState(
+    val isLoadingBasicInfo: Boolean = false,
+    val isLoadingComplexInfo: Boolean = false,
+    val name: String? = null,
+    val profilePictureUrl: String? = null,
+    val info: List<SomeComplexObject> = emptyList(),
+)
+
+val initialState = UserProfileState()
+
+val stateMachine = StateMachine.create(initialState) {
+    on<AppEvent.ShowLoading> { transitionUtils ->
+        transitionUtils.send(
+            transitionUtils.getCurrentState().copy(
+                isLoadingBasicInfo = true,
+                isLoadingComplexInfo = true,
+            )
+        )
     }
 
-    state<AppState.Loading> {
-        on<AppEvent.LoadData> {
-            AppState.Loaded(items)
-        }
-    }
+    ...
 }
 
-assertEquals(State.Initial, stateMachine.state)
-
-val loadState = stateMachine.onEvent(AppEvent.ShowLoading)
-assertEquals(AppState.Loading, loadState)
-
-val loadedState = stateMachine.onEvent(AppEvent.LoadData)
-assertEquals(loadedState, stateMachine.state)
-assertTrue(loadedState is AppState.Loaded<*>)
-assertEquals(items, loadedState.data)
+fun suspend someFunctionLater() {
+    stateMachine.state.collect { userProfileState ->
+        // updated state
+    }
+}
 ```
 
 More details in StateMachineTest.kt
