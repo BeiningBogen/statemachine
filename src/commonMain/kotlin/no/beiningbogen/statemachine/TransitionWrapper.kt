@@ -1,6 +1,6 @@
 package no.beiningbogen.statemachine
 
-import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 /**
  * A simple object holding the lambda creating a new state.
@@ -8,10 +8,11 @@ import kotlinx.coroutines.channels.SendChannel
  * state machine. It is only useful internally.
  */
 
+@ExperimentalCoroutinesApi
 class TransitionWrapper<STATE, EVENT : Any>(
 
     /**
      * The lambda creating a new [STATE] object based on the [EVENT] parameter.
      */
-    val transition: suspend (EVENT, SendChannel<STATE>) -> Unit
+    val transition: suspend (StateMachine<STATE, EVENT>.TransitionUtils<STATE, EVENT>) -> Unit
 )

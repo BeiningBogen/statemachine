@@ -11,6 +11,8 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.ExperimentalTime
 
@@ -18,49 +20,67 @@ import kotlin.time.ExperimentalTime
 @ExperimentalCoroutinesApi
 class StateMachineTest {
 
-    private lateinit var stateMachine: StateMachine<TestStates, AppEvent>
-    private lateinit var items: List<Item>
+    private lateinit var stateMachine: StateMachine<TestState, TestEvent>
     private lateinit var itemRepository: FakeItemRepository
-
     private val dispatcher = TestCoroutineDispatcher()
 
     @Before
     fun setUp() {
-        items = mock()
         itemRepository = mock()
+        val initialState = TestState()
 
-        stateMachine = StateMachine.create(TestStates.Initial, dispatcher) {
+        /**
+         * Create and initialize the state machine to use in our tests.
+         */
+        stateMachine = StateMachine.create(initialState, dispatcher) {
             /**
-             * Define on which states the transitions register inside the lambda should applied to.
+             * Register a lambda triggered when [TestEvent.ShowLoading] will be passed to
+             * [StateMachine.onEvent].
              */
-            states(TestStates.Initial::class, TestStates.Loaded::class) {
-
-                /**
-                 * Register a lambda triggered by a specific event executing some suspending
-                 * code and returning a new state.
-                 */
-                on<AppEvent.ShowLoading> { event, sendChannel ->
-                    sendChannel.send(TestStates.Loading)
-                }
+            on<TestEvent.ShowLoading> { transitionUtils ->
+                transitionUtils.send(
+                    transitionUtils.getCurrentState().copy(
+                        isUserLoading = true,
+                        arePicturesLoading = true,
+                    )
+                )
             }
 
             /**
-             * In order to use states requiring parameters, the previous transition could have been register with
-             * states(AppState.Initial::class, AppState.AnotherState::class)
+             * Register a lambda triggered when [TestEvent.LoadUser] will be passed to
+             * [StateMachine.onEvent].
              */
+            on<TestEvent.LoadUser> { transitionUtils ->
+                transitionUtils.send(
+                    transitionUtils.getCurrentState().copy(
+                        isUserLoading = false,
+                        user = "John"
+                    )
+                )
+            }
 
-            states(TestStates.Loading::class, TestStates.Error::class) {
-                on<AppEvent.LoadData> { event, sendChannel ->
-                    sendChannel.send(TestStates.Loaded(items))
-                }
-
-                on<AppEvent.SearchItemByName> { event, sendChannel ->
-                    try {
-                        val data = itemRepository.search(event.name, event.page)
-                        sendChannel.send(TestStates.Loaded(data))
-                    } catch (e: Exception) {
-                        sendChannel.send(TestStates.Error(e.localizedMessage))
-                    }
+            /**
+             * Register a lambda triggered when [TestEvent.LoadPictures] will be passed to
+             * [StateMachine.onEvent].
+             */
+            on<TestEvent.LoadPictures> { transitionUtils ->
+                try {
+                    val offset = transitionUtils.event.offset
+                    val limit = transitionUtils.event.limit
+                    val data = itemRepository.loadPictures(offset, limit)
+                    transitionUtils.send(
+                        transitionUtils.getCurrentState().copy(
+                            arePicturesLoading = false,
+                            pictures = data
+                        )
+                    )
+                } catch (e: Exception) {
+                    transitionUtils.send(
+                        transitionUtils.getCurrentState().copy(
+                            arePicturesLoading = false,
+                            error = TestError.NetworkError
+                        )
+                    )
                 }
             }
         }
@@ -73,95 +93,114 @@ class StateMachineTest {
 
     @Test
     fun `initial state should be State_Initial`() = dispatcher.runBlockingTest {
-        assertEquals(TestStates.Initial, stateMachine.state.first())
+        assertEquals(TestState(), stateMachine.state.first())
     }
 
     @Test
     fun `should transition to State_Loading`() = dispatcher.runBlockingTest {
         stateMachine.state.test {
             var nextState = expectItem()
-            assertEquals(TestStates.Initial, nextState)
+            assertEquals(TestState(), nextState)
 
-            stateMachine.onEvent(AppEvent.ShowLoading)
+            stateMachine.onEvent(TestEvent.ShowLoading)
 
             nextState = expectItem()
-            assertEquals(TestStates.Loading, nextState)
+            assertTrue(nextState.isUserLoading)
+            assertTrue(nextState.arePicturesLoading)
+            assertNull(nextState.user)
+            assertTrue(nextState.pictures.isEmpty())
+            assertNull(nextState.error)
 
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `should transition to State_Loaded after loading`() = dispatcher.runBlockingTest {
+    fun `should transition after TestEvent_LoadUser`() = dispatcher.runBlockingTest {
         stateMachine.state.test {
             var nextState = expectItem()
-            assertEquals(TestStates.Initial, nextState)
+            assertEquals(TestState(), nextState)
 
-            stateMachine.onEvent(AppEvent.ShowLoading)
-
-            nextState = expectItem()
-            assertEquals(TestStates.Loading, nextState)
-
-            stateMachine.onEvent(AppEvent.LoadData)
+            stateMachine.onEvent(TestEvent.ShowLoading)
 
             nextState = expectItem()
-            assertTrue(nextState is TestStates.Loaded<*>)
-            assertEquals(items, nextState.data)
+            assertTrue(nextState.isUserLoading)
+            assertTrue(nextState.arePicturesLoading)
+            assertNull(nextState.user)
+            assertTrue(nextState.pictures.isEmpty())
+            assertNull(nextState.error)
+
+            stateMachine.onEvent(TestEvent.LoadUser)
+
+            nextState = expectItem()
+            assertFalse(nextState.isUserLoading)
+            assertTrue(nextState.arePicturesLoading)
+            assertEquals("John", nextState.user)
+            assertTrue(nextState.pictures.isEmpty())
+            assertNull(nextState.error)
 
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `should transition to State_Loaded after search`() = runBlockingTest {
-        whenever(itemRepository.search("name", 0))
-            .thenReturn(items)
+    fun `should transition after TestEvent_LoadPictures`() = runBlockingTest {
+        whenever(itemRepository.loadPictures(0, 20))
+            .thenReturn(listOf("", "", ""))
 
         stateMachine.state.test {
-            val state = expectItem()
-            assertEquals(TestStates.Initial, state)
+            var state = expectItem()
+            assertEquals(TestState(), state)
 
-            stateMachine.onEvent(AppEvent.ShowLoading)
+            stateMachine.onEvent(TestEvent.ShowLoading)
 
-            val state2 = expectItem()
-            assertEquals(TestStates.Loading, state2)
+            state = expectItem()
+            assertTrue(state.isUserLoading)
+            assertTrue(state.arePicturesLoading)
+            assertNull(state.user)
+            assertTrue(state.pictures.isEmpty())
+            assertNull(state.error)
 
-            stateMachine.onEvent(AppEvent.SearchItemByName("name", 0))
+            stateMachine.onEvent(TestEvent.LoadPictures(0, 20))
 
-            val state3 = expectItem()
-            assertTrue(state3 is TestStates.Loaded<*>)
-            assertEquals(items, state3.data)
+            state = expectItem()
+            assertTrue(state.isUserLoading)
+            assertFalse(state.arePicturesLoading)
+            assertNull(state.user)
+            assertTrue(state.pictures.isNotEmpty())
+            assertNull(state.error)
 
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `should transition to Error and State_Loaded after retry`() = runBlockingTest {
+    fun `error should not be null after loading fails`() = runBlockingTest {
         val error = Exception("error")
-        whenever(itemRepository.search("name", 0))
+        whenever(itemRepository.loadPictures(0, 20))
             .thenThrow(error)
-            .thenReturn(items)
 
         stateMachine.state.test {
-            val state = expectItem()
-            assertEquals(TestStates.Initial, state)
+            var state = expectItem()
+            assertEquals(TestState(), state)
 
-            stateMachine.onEvent(AppEvent.ShowLoading)
+            stateMachine.onEvent(TestEvent.ShowLoading)
 
-            val state2 = expectItem()
-            assertEquals(TestStates.Loading, state2)
+            state = expectItem()
+            assertTrue(state.isUserLoading)
+            assertTrue(state.arePicturesLoading)
+            assertNull(state.user)
+            assertTrue(state.pictures.isEmpty())
+            assertNull(state.error)
 
-            stateMachine.onEvent(AppEvent.SearchItemByName("name", 0))
+            stateMachine.onEvent(TestEvent.LoadPictures(0, 0))
 
-            val state3 = expectItem()
-            assertTrue(state3 is TestStates.Error)
-
-            stateMachine.onEvent(AppEvent.SearchItemByName("name", 0))
-
-            val state4 = expectItem()
-            assertTrue(state4 is TestStates.Loaded<*>)
-            assertEquals(items, state4.data)
+            state = expectItem()
+            assertTrue(state.isUserLoading)
+            assertFalse(state.arePicturesLoading)
+            assertNull(state.user)
+            assertTrue(state.pictures.isEmpty())
+            assertEquals(TestError.NetworkError, state.error)
 
             cancelAndIgnoreRemainingEvents()
         }
@@ -170,6 +209,6 @@ class StateMachineTest {
 
 private interface FakeItemRepository {
     @Throws(Exception::class)
-    suspend fun search(name: String, page: Int): List<Item>
+    suspend fun loadPictures(offset: Int, limit: Int): List<String>
 }
 

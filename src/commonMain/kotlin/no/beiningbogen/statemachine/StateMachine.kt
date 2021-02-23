@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
-import no.beiningbogen.statemachine.error.CannotApplyEventError
+import no.beiningbogen.statemachine.error.NoTransitionAssociated
 import kotlin.coroutines.CoroutineContext
 import kotlin.reflect.KClass
 
@@ -15,13 +15,14 @@ import kotlin.reflect.KClass
  * The main classes used by the developer to create a new state machine.
  */
 @ExperimentalCoroutinesApi
-class StateMachine<STATE : Any, EVENT : Any>(
+class StateMachine<STATE, EVENT : Any>(
     initialState: STATE,
     coroutineContext: CoroutineContext,
     private val registry: TransitionRegistry<STATE, EVENT>
 ) {
     private val supervisor = SupervisorJob()
     private val coroutineScope = CoroutineScope(coroutineContext + supervisor)
+    private var runningJob: Job? = null
 
     private var currentState: STATE = initialState
     private val stateChannel = Channel<STATE>()
@@ -41,15 +42,15 @@ class StateMachine<STATE : Any, EVENT : Any>(
      * @throws : CannotApplyEventError when the event passed as parameter cannot be applied
      * to the current state in which the state machine is.
      */
-    @Throws(CannotApplyEventError::class)
+    @Throws(NoTransitionAssociated::class)
     fun <T : EVENT> onEvent(event: T) {
         if (stateChannel.isClosedForSend) return
 
-        val wrapper = registry.findTransitionWrapper(currentState::class, event::class)
-            ?: throw CannotApplyEventError(currentState, event)
+        val wrapper = registry.findTransitionWrapper(event::class)
+            ?: throw NoTransitionAssociated(event)
 
-        coroutineScope.launch {
-            wrapper.transition.invoke(event, stateChannel)
+        runningJob = coroutineScope.launch {
+            wrapper.transition.invoke(TransitionUtils(stateChannel, event))
         }
     }
 
@@ -61,7 +62,7 @@ class StateMachine<STATE : Any, EVENT : Any>(
      * @throws : CannotApplyEventError when the event passed as parameter cannot be applied
      * to the current state in which the state machine is.
      */
-    @Throws(CannotApplyEventError::class)
+    @Throws(NoTransitionAssociated::class)
     fun <T : EVENT> retry(event: T, delay: Long = 0) {
         CoroutineScope(Dispatchers.Unconfined).launch {
             delay(delay)
@@ -73,23 +74,43 @@ class StateMachine<STATE : Any, EVENT : Any>(
      * Clean up the supervisor job and the coroutine scope to prevent leaking resources.
      */
     fun destroy() {
+        runningJob?.cancel()
         supervisor.cancel()
         coroutineScope.cancel()
+    }
+
+    inner class TransitionUtils<STATE, EVENT : Any>(
+        private val sendChannel: SendChannel<STATE>,
+        val event: EVENT,
+    ) {
+        fun getCurrentState() = currentState
+
+        suspend fun send(newState: STATE) {
+            if(!sendChannel.isClosedForSend) {
+                sendChannel.send(newState)
+            }
+        }
+
+        fun offer(newState: STATE) {
+            if(!sendChannel.isClosedForSend) {
+                sendChannel.offer(newState)
+            }
+        }
     }
 
     companion object {
 
         /**
          * The starting point to create a new state machine.
-         * @param configuration: a [DslStateMachineBuilder] to register states
+         * @param configuration: a [StateMachineBuilder] to register states
          * on which events can be applied.
          */
         fun <STATE : Any, EVENT : Any> create(
             initialState: STATE,
             coroutineContext: CoroutineContext,
-            configuration: DslStateMachineBuilder<STATE, EVENT>.() -> Unit
+            configuration: StateMachineBuilder<STATE, EVENT>.() -> Unit
         ): StateMachine<STATE, EVENT> {
-            val builder = DslStateMachineBuilder<STATE, EVENT>()
+            val builder = StateMachineBuilder<STATE, EVENT>()
             configuration(builder)
             return builder.build(initialState, coroutineContext)
         }
@@ -100,7 +121,7 @@ class StateMachine<STATE : Any, EVENT : Any>(
  * Builder class to register the different states covered by the state machine.
  */
 @ExperimentalCoroutinesApi
-class DslStateMachineBuilder<STATE : Any, EVENT : Any> {
+class StateMachineBuilder<STATE : Any, EVENT : Any> {
 
     /**
      * The registry containing all the different transitions
@@ -108,61 +129,11 @@ class DslStateMachineBuilder<STATE : Any, EVENT : Any> {
      */
     val registry = TransitionRegistry<STATE, EVENT>()
 
-    /**
-     * Define the state on which the transitions declared in the lambda passed as parameter should
-     * be applied on. For example :
-     *
-     * state<SomeState> {
-     *     ...
-     * }
-     *
-     * @param T : The given [STATE] to use in the lambda parameter.
-     * @param block : the lambda defining transitions for the state machine.
-     */
-    inline fun <reified T : STATE> state(block: DslStateBuilder<STATE, EVENT>.() -> Unit) {
-        val builder = DslStateBuilder(T::class, registry)
-        block(builder)
-    }
-
-    /**
-     * Define the states on which the transitions declared in the lambda passed as parameter should
-     * be applied on. For example :
-     *
-     * states(SomeState, SomeOtherState) {
-     *     ...
-     * }
-     *
-     * This methode will work for states defined as object since they don't require
-     * parameters. For declaring multiple states requiring parameters, see [states]
-     *
-     * @param states : an array/vararg of [STATE] on which the transitions will operate.
-     * @param block : the lambda defining transitions for the state machine.
-     */
-    fun states(vararg states: STATE, block: DslStateBuilder<STATE, EVENT>.() -> Unit) {
-        for (state in states) {
-            val builder = DslStateBuilder(state::class, registry)
-            block(builder)
-        }
-    }
-
-    /**
-     * Define the states on which the transitions declared in the lambda passed as parameter should
-     * be applied on. For example :
-     *
-     * states(SomeState, SomeOtherState) {
-     *     ...
-     * }
-     *
-     * This methode will work for states defined as object or data classes.
-     *
-     * @param states : an array/vararg of [STATE] on which the transitions will operate.
-     * @param block : the lambda defining transitions for the state machine.
-     */
-    fun states(vararg states: KClass<out STATE>, block: DslStateBuilder<STATE, EVENT>.() -> Unit) {
-        for (state in states) {
-            val builder = DslStateBuilder(state, registry)
-            block(builder)
-        }
+    inline fun <reified T : EVENT> on(
+        noinline block: suspend (StateMachine<STATE, T>.TransitionUtils<STATE, T>) -> Unit
+    ) {
+        val transition = TransitionWrapper(block)
+        registry.registerTransition(T::class, transition)
     }
 
     /**
@@ -170,33 +141,5 @@ class DslStateMachineBuilder<STATE : Any, EVENT : Any> {
      */
     fun build(initialState: STATE, coroutineContext: CoroutineContext): StateMachine<STATE, EVENT> {
         return StateMachine(initialState, coroutineContext, registry)
-    }
-}
-
-/**
- * Builder class to register different transitions.
- */
-
-class DslStateBuilder<STATE : Any, EVENT : Any>(
-    val stateType: KClass<out STATE>,
-    val registry: TransitionRegistry<STATE, EVENT>
-) {
-
-    /**
-     * Define the event triggering the lambda used for transitioning the
-     * state machine to a new state. For example :
-     *
-     * state<SomeState> {
-     *     on<SomeEvent> {
-     *         SomeOtherState
-     *     }
-     * }
-     *
-     * @param T : The given [STATE] to use in the lambda parameter.
-     * @param block : the lambda defining a specific transition.
-     */
-    inline fun <reified T : EVENT> on(noinline block: suspend (T, SendChannel<STATE>) -> Unit) {
-        val transition = TransitionWrapper(block)
-        registry.registerTransition(stateType, T::class, transition)
     }
 }

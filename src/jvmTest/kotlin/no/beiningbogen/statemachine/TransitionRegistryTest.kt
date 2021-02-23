@@ -8,18 +8,16 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.TestCoroutineDispatcher
 import kotlinx.coroutines.test.runBlockingTest
 import org.junit.Before
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
+import kotlin.test.*
 import kotlin.time.ExperimentalTime
 
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 class TransitionRegistryTest {
 
-    private lateinit var registry: TransitionRegistry<TestStates, AppEvent>
+    private lateinit var registry: TransitionRegistry<TestState, TestEvent>
     private lateinit var items: List<Item>
+    private lateinit var stateMachine: StateMachine<TestState, TestEvent>
 
     private val dispatcher = TestCoroutineDispatcher()
 
@@ -27,38 +25,57 @@ class TransitionRegistryTest {
     fun setUp() {
         registry = TransitionRegistry()
         items = mock()
+        stateMachine = mock()
     }
 
     @Test
     fun `add transitions to the registry and fetch them`() = dispatcher.runBlockingTest {
-        val showLoadingTransition = TransitionWrapper<TestStates, AppEvent.ShowLoading> { event, sendChannel ->
-            sendChannel.offer(TestStates.Loading)
+        val showLoadingTransition = TransitionWrapper<TestState, TestEvent.ShowLoading> { transitionUtils ->
+            transitionUtils.offer(
+                TestState(
+                    isUserLoading = true,
+                    arePicturesLoading = true,
+                )
+            )
         }
+        registry.registerTransition(TestEvent.ShowLoading::class, showLoadingTransition)
 
-        val dataLoadedTransition = TransitionWrapper<TestStates, AppEvent.LoadData> { event, sendChannel ->
-            sendChannel.offer(TestStates.Loaded(items))
+        val loadUserTransition = TransitionWrapper<TestState, TestEvent.LoadUser> { transitionUtils ->
+            transitionUtils.send(
+                TestState(
+                    isUserLoading = false,
+                    arePicturesLoading = true,
+                    user = "John"
+                )
+            )
         }
+        registry.registerTransition(TestEvent.LoadUser::class, loadUserTransition)
 
-        registry.registerTransition(TestStates.Initial::class, AppEvent.ShowLoading::class, showLoadingTransition)
-        registry.registerTransition(TestStates.Loading::class, AppEvent.LoadData::class, dataLoadedTransition)
-
-        val channel = Channel<TestStates>()
+        val channel = Channel<TestState>()
         channel.receiveAsFlow().test {
-            val showLoadingFoundTransition = registry.findTransitionWrapper(TestStates.Initial::class, AppEvent.ShowLoading::class)
+            val showLoadingFoundTransition = registry.findTransitionWrapper(TestEvent.ShowLoading::class)
             assertNotNull(showLoadingFoundTransition)
 
-            showLoadingFoundTransition.transition(AppEvent.ShowLoading, channel)
+            showLoadingFoundTransition.transition(stateMachine.TransitionUtils(channel, TestEvent.ShowLoading))
 
-            assertEquals(TestStates.Loading, expectItem())
+            var state = expectItem()
+            assertTrue(state.isUserLoading)
+            assertTrue(state.arePicturesLoading)
+            assertNull(state.user)
+            assertTrue(state.pictures.isEmpty())
+            assertNull(state.error)
 
-            val loadingFoundTransition = registry.findTransitionWrapper(TestStates.Loading::class, AppEvent.LoadData::class)
+            val loadingFoundTransition = registry.findTransitionWrapper(TestEvent.LoadUser::class)
             assertNotNull(loadingFoundTransition)
 
-            loadingFoundTransition.transition(AppEvent.LoadData, channel)
+            loadingFoundTransition.transition(stateMachine.TransitionUtils(channel, TestEvent.LoadUser))
 
-            val loadedState = expectItem()
-            assertTrue(loadedState is TestStates.Loaded<*>)
-            assertEquals(items, loadedState.data)
+            state = expectItem()
+            assertFalse(state.isUserLoading)
+            assertTrue(state.arePicturesLoading)
+            assertEquals("John", state.user)
+            assertTrue(state.pictures.isEmpty())
+            assertNull(state.error)
 
             cancelAndIgnoreRemainingEvents()
         }

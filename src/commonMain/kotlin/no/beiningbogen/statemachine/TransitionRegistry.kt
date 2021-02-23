@@ -1,18 +1,20 @@
 package no.beiningbogen.statemachine
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlin.reflect.KClass
 
 /**
  * Stores all the transitions declared by the developer in the state machine dsl.
  */
 
-class TransitionRegistry<STATE : Any, EVENT : Any> {
+@ExperimentalCoroutinesApi
+class TransitionRegistry<STATE, EVENT : Any> {
 
     /**
      * A map of [TransitionWrapper] associated with [TransitionMatcher] as its key.
      * It holds all the possible transition of a state machine created with the dsl.
      */
-    private val registry = mutableMapOf<TransitionMatcher<STATE, EVENT>, TransitionWrapper<STATE, out EVENT>>()
+    private val registry = mutableMapOf<KClass<out EVENT>, TransitionWrapper<STATE, out EVENT>>()
 
     /**
      * Add a [TransitionWrapper] to the registry with a specific [TransitionMatcher]
@@ -21,11 +23,10 @@ class TransitionRegistry<STATE : Any, EVENT : Any> {
      * @param transition: the transition to use by the state machine to move on the next state.
      */
     fun registerTransition(
-        stateType: KClass<out STATE>,
         eventType: KClass<out EVENT>,
         transition: TransitionWrapper<STATE, out EVENT>
     ) {
-        registry[TransitionMatcher(stateType, eventType)] = transition
+        registry[eventType] = transition
     }
 
     /**
@@ -36,10 +37,9 @@ class TransitionRegistry<STATE : Any, EVENT : Any> {
      * pair of state and event type passed as parameters, otherwise null.
      */
     internal fun findTransitionWrapper(
-        stateType: KClass<out STATE>,
         eventType: KClass<out EVENT>
     ): TransitionWrapper<STATE, EVENT>? {
-        val key = registry.keys.firstOrNull { it.matches(stateType, eventType) } ?: return null
+        val key = registry.keys.firstOrNull { it == eventType } ?: return null
         return registry[key] as TransitionWrapper<STATE, EVENT>
     }
 }
