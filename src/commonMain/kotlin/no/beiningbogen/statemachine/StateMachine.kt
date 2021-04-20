@@ -79,20 +79,21 @@ class StateMachine<STATE, EVENT : Any>(
         coroutineScope.cancel()
     }
 
-    inner class TransitionUtils<STATE, EVENT : Any>(
+    inner class TransitionUtils (
         private val sendChannel: SendChannel<STATE>,
         val event: EVENT,
     ) {
-        fun getCurrentState() = currentState
+        val state: STATE
+            get() = currentState
 
         suspend fun send(newState: STATE) {
-            if(!sendChannel.isClosedForSend) {
+            if (!sendChannel.isClosedForSend) {
                 sendChannel.send(newState)
             }
         }
 
         fun offer(newState: STATE) {
-            if(!sendChannel.isClosedForSend) {
+            if (!sendChannel.isClosedForSend) {
                 sendChannel.offer(newState)
             }
         }
@@ -130,9 +131,9 @@ class StateMachineBuilder<STATE : Any, EVENT : Any> {
     val registry = TransitionRegistry<STATE, EVENT>()
 
     inline fun <reified T : EVENT> on(
-        noinline block: suspend (StateMachine<STATE, T>.TransitionUtils<STATE, T>) -> Unit
+        noinline lambda: Transition<STATE, T>
     ) {
-        val transition = TransitionWrapper(block)
+        val transition = TransitionWrapper(lambda)
         registry.registerTransition(T::class, transition)
     }
 

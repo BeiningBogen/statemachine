@@ -30,18 +30,18 @@ class TransitionRegistryTest {
 
     @Test
     fun `add transitions to the registry and fetch them`() = dispatcher.runBlockingTest {
-        val showLoadingTransition = TransitionWrapper<TestState, TestEvent.ShowLoading> { transitionUtils ->
-            transitionUtils.offer(
+        val showLoadingTransition: Transition<TestState, TestEvent.ShowLoading> = {
+            offer(
                 TestState(
                     isUserLoading = true,
                     arePicturesLoading = true,
                 )
             )
         }
-        registry.registerTransition(TestEvent.ShowLoading::class, showLoadingTransition)
+        registry.registerTransition(TestEvent.ShowLoading::class, TransitionWrapper(showLoadingTransition))
 
-        val loadUserTransition = TransitionWrapper<TestState, TestEvent.LoadUser> { transitionUtils ->
-            transitionUtils.send(
+        val loadUserTransition: Transition<TestState, TestEvent.LoadUser> = {
+            offer(
                 TestState(
                     isUserLoading = false,
                     arePicturesLoading = true,
@@ -49,7 +49,7 @@ class TransitionRegistryTest {
                 )
             )
         }
-        registry.registerTransition(TestEvent.LoadUser::class, loadUserTransition)
+        registry.registerTransition(TestEvent.LoadUser::class, TransitionWrapper(loadUserTransition))
 
         val channel = Channel<TestState>()
         channel.receiveAsFlow().test {

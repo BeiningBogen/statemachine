@@ -37,9 +37,9 @@ class StateMachineTest {
              * Register a lambda triggered when [TestEvent.ShowLoading] will be passed to
              * [StateMachine.onEvent].
              */
-            on<TestEvent.ShowLoading> { transitionUtils ->
-                transitionUtils.send(
-                    transitionUtils.getCurrentState().copy(
+            on<TestEvent.ShowLoading> {
+                send(
+                    state.copy(
                         isUserLoading = true,
                         arePicturesLoading = true,
                     )
@@ -50,9 +50,9 @@ class StateMachineTest {
              * Register a lambda triggered when [TestEvent.LoadUser] will be passed to
              * [StateMachine.onEvent].
              */
-            on<TestEvent.LoadUser> { transitionUtils ->
-                transitionUtils.send(
-                    transitionUtils.getCurrentState().copy(
+            on<TestEvent.LoadUser> {
+                send(
+                    state.copy(
                         isUserLoading = false,
                         user = "John"
                     )
@@ -63,20 +63,18 @@ class StateMachineTest {
              * Register a lambda triggered when [TestEvent.LoadPictures] will be passed to
              * [StateMachine.onEvent].
              */
-            on<TestEvent.LoadPictures> { transitionUtils ->
+            on<TestEvent.LoadPictures> {
                 try {
-                    val offset = transitionUtils.event.offset
-                    val limit = transitionUtils.event.limit
-                    val data = itemRepository.loadPictures(offset, limit)
-                    transitionUtils.send(
-                        transitionUtils.getCurrentState().copy(
+                    val data = itemRepository.loadPictures(event.offset, event.limit)
+                    send(
+                        state.copy(
                             arePicturesLoading = false,
                             pictures = data
                         )
                     )
                 } catch (e: Exception) {
-                    transitionUtils.send(
-                        transitionUtils.getCurrentState().copy(
+                    send(
+                        state.copy(
                             arePicturesLoading = false,
                             error = TestError.NetworkError
                         )
@@ -92,12 +90,14 @@ class StateMachineTest {
     }
 
     @Test
-    fun `initial state should be State_Initial`() = dispatcher.runBlockingTest {
-        assertEquals(TestState(), stateMachine.state.first())
+    fun shouldBeStateInitial() = dispatcher.runBlockingTest {
+        stateMachine.state.test {
+            assertEquals(TestState(), expectItem())
+        }
     }
 
     @Test
-    fun `should transition to State_Loading`() = dispatcher.runBlockingTest {
+    fun shouldTransitionToStateLoading() = dispatcher.runBlockingTest {
         stateMachine.state.test {
             var nextState = expectItem()
             assertEquals(TestState(), nextState)
@@ -116,7 +116,7 @@ class StateMachineTest {
     }
 
     @Test
-    fun `should transition after TestEvent_LoadUser`() = dispatcher.runBlockingTest {
+    fun shouldTransitionAfterTestEventLoadUser() = dispatcher.runBlockingTest {
         stateMachine.state.test {
             var nextState = expectItem()
             assertEquals(TestState(), nextState)
@@ -144,7 +144,7 @@ class StateMachineTest {
     }
 
     @Test
-    fun `should transition after TestEvent_LoadPictures`() = runBlockingTest {
+    fun shouldTransitionAfterTestEventLoadPictures() = runBlockingTest {
         whenever(itemRepository.loadPictures(0, 20))
             .thenReturn(listOf("", "", ""))
 
@@ -175,7 +175,7 @@ class StateMachineTest {
     }
 
     @Test
-    fun `error should not be null after loading fails`() = runBlockingTest {
+    fun errorShouldNotBeNullAfterLoadingFails() = runBlockingTest {
         val error = Exception("error")
         whenever(itemRepository.loadPictures(0, 20))
             .thenThrow(error)

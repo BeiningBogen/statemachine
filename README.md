@@ -27,9 +27,9 @@ data class UserProfileState(
 val initialState = UserProfileState()
 
 val stateMachine = StateMachine.create(initialState) {
-    on<AppEvent.ShowLoading> { transitionUtils ->
-        transitionUtils.send(
-            transitionUtils.getCurrentState().copy(
+    on<AppEvent.ShowLoading> {
+        send(
+            state.copy(
                 isLoadingBasicInfo = true,
                 isLoadingComplexInfo = true,
             )
