@@ -2,23 +2,27 @@ plugins {
     kotlin("multiplatform") version "1.4.21"
     id("maven-publish")
 }
-group = "no.beiningbogen"
-version = "0.6.0"
 
-repositories {
-    mavenCentral()
-    jcenter()
-    google()
+group = "no.beiningbogen"
+version = "0.7.1"
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath ("com.android.tools.build:gradle:7.0.0-alpha14")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.4.32")
+    }
 }
 
 publishing {
     repositories {
         maven {
             url = uri("https://maven.pkg.jetbrains.space/beiningbogen/p/stmn/maven")
-            credentials {
-                username = project.extra["space_usr"].toString()
-                password = project.extra["space_pwd"].toString()
-            }
+            name = "stateMachine"
+            credentials(PasswordCredentials::class)
         }
     }
 }
@@ -61,7 +65,7 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.1")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2-native-mt")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.3-native-mt")
             }
         }
         val commonTest by getting {
@@ -75,14 +79,14 @@ kotlin {
             dependencies {
                 implementation(kotlin("test-junit"))
                 implementation(kotlin("test-junit"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.4.2")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.4.3")
                 implementation("com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0")
                 implementation("org.mockito:mockito-inline:3.3.3")
                 implementation("androidx.arch.core:core-testing:2.1.0")
                 implementation("androidx.test:core:1.3.0")
                 implementation("androidx.test.ext:junit:1.1.2")
                 implementation("junit:junit:4.13.1")
-                implementation("app.cash.turbine:turbine:0.3.0")
+                implementation("app.cash.turbine:turbine:0.4.1")
             }
         }
         val jsMain by getting
