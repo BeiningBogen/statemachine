@@ -1,10 +1,9 @@
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+pluginManagement {
     repositories {
-        google()
         mavenCentral()
+        google()
+        gradlePluginPortal()
     }
 }
 
 rootProject.name = "StateMachine"
-include(":app")

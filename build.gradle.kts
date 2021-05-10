@@ -1,10 +1,10 @@
 plugins {
-    kotlin("multiplatform") version "1.4.21"
+    kotlin("multiplatform") version "1.5.0"
     id("maven-publish")
 }
 
 group = "no.beiningbogen"
-version = "0.7.1"
+version = "1.0.0"
 
 buildscript {
     repositories {
@@ -12,9 +12,13 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath ("com.android.tools.build:gradle:7.0.0-alpha14")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.4.32")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.5.0")
     }
+}
+
+repositories {
+    google()
+    mavenCentral()
 }
 
 publishing {
@@ -64,7 +68,6 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.1")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.3-native-mt")
             }
         }
@@ -80,7 +83,6 @@ kotlin {
                 implementation(kotlin("test-junit"))
                 implementation(kotlin("test-junit"))
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.4.3")
-                implementation("com.nhaarman.mockitokotlin2:mockito-kotlin:2.2.0")
                 implementation("org.mockito:mockito-inline:3.3.3")
                 implementation("androidx.arch.core:core-testing:2.1.0")
                 implementation("androidx.test:core:1.3.0")

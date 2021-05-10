@@ -1,10 +1,7 @@
 package no.beiningbogen.statemachine
 
 import app.cash.turbine.test
-import com.nhaarman.mockitokotlin2.mock
-import com.nhaarman.mockitokotlin2.whenever
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestCoroutineDispatcher
 import kotlinx.coroutines.test.runBlockingTest
 import org.junit.After
@@ -16,70 +13,72 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.ExperimentalTime
 
+data class User(
+    val id: String,
+    val name: String,
+)
+
+data class TestState(
+    val isLoading: Boolean = false,
+    val user: User? = null,
+    val error: TestError? = null,
+)
+
+sealed class TestEvent {
+    data class LoadUser(val id: String) : TestEvent()
+    data class DeleteUser(val id: String) : TestEvent()
+}
+
+class LoadUserName : Transition<TestState, TestEvent.LoadUser> {
+    override val isExecutable: (TestState) -> Boolean = { !it.isLoading }
+    override val execute: suspend TransitionUtils<TestState, TestEvent.LoadUser>.() -> Unit = {
+        emitNewState(currentState().copy(isLoading = true))
+        val user = loadUser(event.id)
+        emitNewState(
+            currentState().copy(
+                isLoading = false,
+                user = user
+            )
+        )
+    }
+
+    private fun loadUser(id: String): User {
+        // do whatever here with the id
+        return User(id = id, name = "John")
+    }
+}
+
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 class StateMachineTest {
 
     private lateinit var stateMachine: StateMachine<TestState, TestEvent>
-    private lateinit var itemRepository: FakeItemRepository
     private val dispatcher = TestCoroutineDispatcher()
 
     @Before
     fun setUp() {
-        itemRepository = mock()
         val initialState = TestState()
 
         /**
-         * Create and initialize the state machine to use in our tests.
+         * Create and initialize a state machine with a builder lambda.
          */
-        stateMachine = StateMachine.create(initialState, dispatcher) {
-            /**
-             * Register a lambda triggered when [TestEvent.ShowLoading] will be passed to
-             * [StateMachine.onEvent].
-             */
-            on<TestEvent.ShowLoading> {
-                send(
-                    state.copy(
-                        isUserLoading = true,
-                        arePicturesLoading = true,
-                    )
-                )
-            }
+        stateMachine = createStateMachine(initialState, dispatcher) {
 
             /**
-             * Register a lambda triggered when [TestEvent.LoadUser] will be passed to
-             * [StateMachine.onEvent].
+             * Register a predefined transition.
              */
-            on<TestEvent.LoadUser> {
-                send(
-                    state.copy(
-                        isUserLoading = false,
-                        user = "John"
-                    )
-                )
-            }
+            register(LoadUserName())
 
             /**
-             * Register a lambda triggered when [TestEvent.LoadPictures] will be passed to
-             * [StateMachine.onEvent].
+             * Register an anonymous transition here
              */
-            on<TestEvent.LoadPictures> {
-                try {
-                    val data = itemRepository.loadPictures(event.offset, event.limit)
-                    send(
-                        state.copy(
-                            arePicturesLoading = false,
-                            pictures = data
-                        )
-                    )
-                } catch (e: Exception) {
-                    send(
-                        state.copy(
-                            arePicturesLoading = false,
-                            error = TestError.NetworkError
-                        )
-                    )
-                }
+            register {
+                transition<TestState, TestEvent.DeleteUser>(
+                    predicate = { !it.isLoading },
+                    execution = {
+                        // do something with the picture object here
+                    }
+                )
             }
         }
     }
@@ -90,125 +89,31 @@ class StateMachineTest {
     }
 
     @Test
-    fun shouldBeStateInitial() = dispatcher.runBlockingTest {
+    fun shouldBeInitialState() = dispatcher.runBlockingTest {
         stateMachine.state.test {
             assertEquals(TestState(), expectItem())
         }
     }
 
     @Test
-    fun shouldTransitionToStateLoading() = dispatcher.runBlockingTest {
+    fun shouldTransitionUserLoadedState() = dispatcher.runBlockingTest {
         stateMachine.state.test {
             var nextState = expectItem()
             assertEquals(TestState(), nextState)
 
-            stateMachine.onEvent(TestEvent.ShowLoading)
+            stateMachine.onEvent(TestEvent.LoadUser("1"))
 
             nextState = expectItem()
-            assertTrue(nextState.isUserLoading)
-            assertTrue(nextState.arePicturesLoading)
+            assertTrue(nextState.isLoading)
             assertNull(nextState.user)
-            assertTrue(nextState.pictures.isEmpty())
             assertNull(nextState.error)
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun shouldTransitionAfterTestEventLoadUser() = dispatcher.runBlockingTest {
-        stateMachine.state.test {
-            var nextState = expectItem()
-            assertEquals(TestState(), nextState)
-
-            stateMachine.onEvent(TestEvent.ShowLoading)
 
             nextState = expectItem()
-            assertTrue(nextState.isUserLoading)
-            assertTrue(nextState.arePicturesLoading)
-            assertNull(nextState.user)
-            assertTrue(nextState.pictures.isEmpty())
+            assertFalse(nextState.isLoading)
+            assertEquals(User("1", "John"), nextState.user)
             assertNull(nextState.error)
-
-            stateMachine.onEvent(TestEvent.LoadUser)
-
-            nextState = expectItem()
-            assertFalse(nextState.isUserLoading)
-            assertTrue(nextState.arePicturesLoading)
-            assertEquals("John", nextState.user)
-            assertTrue(nextState.pictures.isEmpty())
-            assertNull(nextState.error)
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun shouldTransitionAfterTestEventLoadPictures() = runBlockingTest {
-        whenever(itemRepository.loadPictures(0, 20))
-            .thenReturn(listOf("", "", ""))
-
-        stateMachine.state.test {
-            var state = expectItem()
-            assertEquals(TestState(), state)
-
-            stateMachine.onEvent(TestEvent.ShowLoading)
-
-            state = expectItem()
-            assertTrue(state.isUserLoading)
-            assertTrue(state.arePicturesLoading)
-            assertNull(state.user)
-            assertTrue(state.pictures.isEmpty())
-            assertNull(state.error)
-
-            stateMachine.onEvent(TestEvent.LoadPictures(0, 20))
-
-            state = expectItem()
-            assertTrue(state.isUserLoading)
-            assertFalse(state.arePicturesLoading)
-            assertNull(state.user)
-            assertTrue(state.pictures.isNotEmpty())
-            assertNull(state.error)
-
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun errorShouldNotBeNullAfterLoadingFails() = runBlockingTest {
-        val error = Exception("error")
-        whenever(itemRepository.loadPictures(0, 20))
-            .thenThrow(error)
-
-        stateMachine.state.test {
-            var state = expectItem()
-            assertEquals(TestState(), state)
-
-            stateMachine.onEvent(TestEvent.ShowLoading)
-
-            state = expectItem()
-            assertTrue(state.isUserLoading)
-            assertTrue(state.arePicturesLoading)
-            assertNull(state.user)
-            assertTrue(state.pictures.isEmpty())
-            assertNull(state.error)
-
-            stateMachine.onEvent(TestEvent.LoadPictures(0, 0))
-
-            state = expectItem()
-            assertTrue(state.isUserLoading)
-            assertFalse(state.arePicturesLoading)
-            assertNull(state.user)
-            assertTrue(state.pictures.isEmpty())
-            assertEquals(TestError.NetworkError, state.error)
 
             cancelAndIgnoreRemainingEvents()
         }
     }
 }
-
-private interface FakeItemRepository {
-    @Throws(Exception::class)
-    suspend fun loadPictures(offset: Int, limit: Int): List<String>
-}
-
