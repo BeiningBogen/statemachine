@@ -68,7 +68,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.3-native-mt")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.0-native-mt")
             }
         }
         val commonTest by getting {
@@ -82,13 +82,13 @@ kotlin {
             dependencies {
                 implementation(kotlin("test-junit"))
                 implementation(kotlin("test-junit"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.4.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.5.0")
                 implementation("org.mockito:mockito-inline:3.3.3")
                 implementation("androidx.arch.core:core-testing:2.1.0")
                 implementation("androidx.test:core:1.3.0")
                 implementation("androidx.test.ext:junit:1.1.2")
                 implementation("junit:junit:4.13.1")
-                implementation("app.cash.turbine:turbine:0.4.1")
+                implementation("app.cash.turbine:turbine:0.5.0")
             }
         }
         val jsMain by getting
