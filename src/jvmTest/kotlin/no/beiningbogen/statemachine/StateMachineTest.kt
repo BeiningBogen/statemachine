@@ -76,7 +76,7 @@ class StateMachineTest {
                 transition<TestState, TestEvent.DeleteUser>(
                     predicate = { !it.isLoading },
                     execution = {
-                        // do something with the picture object here
+                        // do something with DeleteUser.id here
                     }
                 )
             }
