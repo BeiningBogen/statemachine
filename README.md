@@ -1,6 +1,8 @@
 # State Machine
 
-A state machine dsl for kotlin multi-platform project
+A state machine dsl for kotlin multi-platform project.
+
+StateMachine let you create and register transitions for a specific state object. Each transition requires a predicate checking the current state of the machine to ensure it's ran at the correct time.
 
 ## Gradle
 
