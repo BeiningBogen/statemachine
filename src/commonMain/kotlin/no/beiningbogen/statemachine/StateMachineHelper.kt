@@ -1,6 +1,7 @@
 package no.beiningbogen.statemachine
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.coroutines.CoroutineContext
 
 /**
@@ -46,14 +47,13 @@ inline fun <STATE, EVENT, reified T : EVENT> StateMachine<STATE, EVENT>.register
  */
 fun <STATE, EVENT> transition(
     predicate: (STATE) -> Boolean,
-    execution: suspend TransitionUtils<STATE, EVENT>.() -> Unit,
+    execution: suspend (MutableStateFlow<STATE>) -> Unit,
 ): Transition<STATE, EVENT> {
     return object : Transition<STATE, EVENT> {
         override val isExecutable: (STATE) -> Boolean = predicate
-        override val execute: suspend TransitionUtils<STATE, EVENT>.() -> Unit = execution
+        override val execute: suspend (MutableStateFlow<STATE>) -> Unit = execution
     }
 }
-
 
 
 /**

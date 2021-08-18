@@ -2,6 +2,7 @@ package no.beiningbogen.statemachine
 
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestCoroutineDispatcher
 import kotlinx.coroutines.test.runBlockingTest
 import org.junit.After
@@ -13,71 +14,77 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.ExperimentalTime
 
-data class User(
-    val id: String,
+data class Customer(
+    val id: Int,
     val name: String,
 )
 
-data class TestState(
+data class CustomerScreenState(
     val isLoading: Boolean = false,
-    val user: User? = null,
+    val customers: List<Customer> = emptyList(),
     val error: TestError? = null,
 )
 
-sealed class TestEvent {
-    data class LoadUser(val id: String) : TestEvent()
-    data class DeleteUser(val id: String) : TestEvent()
+sealed class TestError {
+    abstract val message: String
+
+    object NetworkError : TestError() {
+        override val message = "something went wrong, try again later"
+    }
 }
 
-class LoadUserName : Transition<TestState, TestEvent.LoadUser> {
-    override val isExecutable: (TestState) -> Boolean = { !it.isLoading }
-    override val execute: suspend TransitionUtils<TestState, TestEvent.LoadUser>.() -> Unit = {
-        emitNewState(currentState().copy(isLoading = true))
-        val user = loadUser(event.id)
-        emitNewState(
-            currentState().copy(
-                isLoading = false,
-                user = user
-            )
-        )
-    }
-
-    private fun loadUser(id: String): User {
-        // do whatever here with the id
-        return User(id = id, name = "John")
-    }
+sealed class CustomerScreenEvents {
+    object ShowLoading : CustomerScreenEvents()
+    object HideLoading : CustomerScreenEvents()
+    object LoadCustomers : CustomerScreenEvents()
 }
 
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 class StateMachineTest {
 
-    private lateinit var stateMachine: StateMachine<TestState, TestEvent>
+    private lateinit var builder: StateMachine<CustomerScreenState, CustomerScreenEvents>.() -> Unit
+    private lateinit var stateMachine: StateMachine<CustomerScreenState, CustomerScreenEvents>
+
     private val dispatcher = TestCoroutineDispatcher()
+    private val customers = listOf(
+        Customer(id = 0, name = "John"),
+        Customer(id = 1, name = "Emma"),
+    )
+    private val loadCustomerTransition = object : Transition<CustomerScreenState, CustomerScreenEvents.LoadCustomers> {
+        override val isExecutable: (CustomerScreenState) -> Boolean = { it.isLoading }
+        override val execute: suspend (MutableStateFlow<CustomerScreenState>) -> Unit = {
+            // do some IO operation to load customers
+            it.value = it.value.copy(customers = customers)
+        }
+    }
 
     @Before
     fun setUp() {
-        val initialState = TestState()
-
         /**
          * Create and initialize a state machine with a builder lambda.
          */
-        stateMachine = createStateMachine(initialState, dispatcher) {
+        builder = {
 
             /**
              * Register a predefined transition.
              */
-            register(LoadUserName())
+            register(loadCustomerTransition)
 
             /**
              * Register an anonymous transition here
              */
             register {
-                transition<TestState, TestEvent.DeleteUser>(
+                transition<CustomerScreenState, CustomerScreenEvents.ShowLoading>(
                     predicate = { !it.isLoading },
-                    execution = {
-                        // do something with DeleteUser.id here
-                    }
+                    execution = { it.value = it.value.copy(isLoading = true) }
+                )
+            }
+
+            register {
+                transition<CustomerScreenState, CustomerScreenEvents.HideLoading>(
+                    predicate = { it.isLoading },
+                    execution = { it.value = it.value.copy(isLoading = false) }
                 )
             }
         }
@@ -89,28 +96,53 @@ class StateMachineTest {
     }
 
     @Test
-    fun shouldBeInitialState() = dispatcher.runBlockingTest {
+    fun shouldTransitionToLoadingState() = dispatcher.runBlockingTest {
+        val initialState = CustomerScreenState()
+        stateMachine = createStateMachine(initialState, dispatcher, builder)
+
         stateMachine.state.test {
-            assertEquals(TestState(), expectItem())
+            assertEquals(initialState, expectItem())
+            stateMachine.onEvent(CustomerScreenEvents.ShowLoading)
+
+            val nextState = expectItem()
+            assertTrue(nextState.isLoading)
+            assertTrue(nextState.customers.isEmpty())
+            assertNull(nextState.error)
+
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun shouldTransitionUserLoadedState() = dispatcher.runBlockingTest {
+    fun shouldTransitionToCustomerLoadedState() = dispatcher.runBlockingTest {
+        val initialState = CustomerScreenState(isLoading = true)
+        stateMachine = createStateMachine(initialState, dispatcher, builder)
+
         stateMachine.state.test {
-            var nextState = expectItem()
-            assertEquals(TestState(), nextState)
+            assertEquals(initialState, expectItem())
+            stateMachine.onEvent(CustomerScreenEvents.LoadCustomers)
 
-            stateMachine.onEvent(TestEvent.LoadUser("1"))
-
-            nextState = expectItem()
+            val nextState = expectItem()
             assertTrue(nextState.isLoading)
-            assertNull(nextState.user)
+            assertEquals(customers, nextState.customers)
             assertNull(nextState.error)
 
-            nextState = expectItem()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun shouldTransitionToHideLoadingState() = dispatcher.runBlockingTest {
+        val initialState = CustomerScreenState(isLoading = true, customers = customers)
+        stateMachine = createStateMachine(initialState, dispatcher, builder)
+
+        stateMachine.state.test {
+            assertEquals(initialState, expectItem())
+            stateMachine.onEvent(CustomerScreenEvents.HideLoading)
+
+            val nextState = expectItem()
             assertFalse(nextState.isLoading)
-            assertEquals(User("1", "John"), nextState.user)
+            assertEquals(customers, nextState.customers)
             assertNull(nextState.error)
 
             cancelAndIgnoreRemainingEvents()

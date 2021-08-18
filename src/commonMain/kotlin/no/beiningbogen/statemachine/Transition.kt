@@ -1,10 +1,6 @@
 package no.beiningbogen.statemachine
 
-class TransitionUtils<STATE, EVENT>(
-    val currentState: () -> STATE,
-    val event: EVENT,
-    val emitNewState: suspend (STATE) -> Unit
-)
+import kotlinx.coroutines.flow.MutableStateFlow
 
 interface Transition<STATE, EVENT> {
     /**
@@ -19,5 +15,5 @@ interface Transition<STATE, EVENT> {
      * A lambda executing the logic to transition the state machine from it's
      * current state to the next one.
      */
-    val execute: suspend TransitionUtils<STATE, EVENT>.() -> Unit
+    val execute: suspend (MutableStateFlow<STATE>) -> Unit
 }

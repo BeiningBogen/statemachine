@@ -1,11 +1,8 @@
 package no.beiningbogen.statemachine
 
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlin.coroutines.CoroutineContext
 
 @ExperimentalCoroutinesApi
@@ -18,31 +15,21 @@ internal class StateMachineImpl<STATE, EVENT>(
     private val coroutineScope = CoroutineScope(coroutineContext + supervisor)
     private var runningJob: Job? = null
 
-    private var currentState: STATE = initialState
-    private val stateChannel = Channel<STATE>()
+    private val _state = MutableStateFlow(initialState)
+    override val state: StateFlow<STATE> = _state
 
     internal val transitions = mutableMapOf<String, Transition<STATE, EVENT>>()
-
-    override val state: Flow<STATE> = stateChannel.receiveAsFlow()
-        .onStart { emit(initialState) }
-        .onEach { currentState = it }
 
     override fun register(eventName: String, transition: Transition<STATE, EVENT>) {
         transitions[eventName] = transition
     }
 
     override fun <T : EVENT> onEvent(eventName: String, event: T) {
-        if (stateChannel.isClosedForSend) return
         val transition = findTransition(eventName)
 
         runningJob = coroutineScope.launch {
-            if (transition.isExecutable(currentState)) {
-                val transitionUtils = TransitionUtils<STATE, EVENT>(
-                    currentState = { currentState },
-                    event = event,
-                    emitNewState = { stateChannel.send(it) }
-                )
-                transition.execute(transitionUtils)
+            if (transition.isExecutable(state.value)) {
+                transition.execute(_state)
             }
         }
     }

@@ -1,12 +1,12 @@
 package no.beiningbogen.statemachine
 
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 
 interface StateMachine<STATE, EVENT> {
     /**
-     * The flow used to emit each new state.
+     * The state flow holding the state of the machine.
      */
-    val state: Flow<STATE>
+    val state: StateFlow<STATE>
 
     /**
      * Register a transition associated to an event name.
@@ -17,18 +17,17 @@ interface StateMachine<STATE, EVENT> {
     fun register(eventName: String, transition: Transition<STATE, EVENT>)
 
     /**
-     * When triggered, the state machine will check if there are any registered
+     * When called, the state machine will check if there are any registered
      * transition associated to that event and if it can be executed. If both
      * conditions are met, the state machine will execute the transition.
      * @param event: the event to use to trigger a transition.
-     * @return the [STATE] resulting of the transition.
      * @throws : CannotApplyEventError when the event passed as parameter cannot be applied
      * to the current state in which the state machine is.
      */
     fun <T : EVENT> onEvent(eventName: String, event: T)
 
     /**
-     * Clean up the supervisor job and the coroutine scope to prevent leaking resources.
+     * Clean up resources.
      */
     fun destroy()
 }
