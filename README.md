@@ -1,9 +1,6 @@
 # State Machine
 
-A state machine dsl for kotlin multi-platform project.
-
-StateMachine let you create and register transitions for a specific state object.
-Each transition requires a predicate checking the current state of the machine to ensure it's ran at the correct time.
+A state machine dsl for kotlin multi-platform project
 
 ## Gradle
 
@@ -13,58 +10,55 @@ maven { url = uri("https://maven.pkg.jetbrains.space/beiningbogen/p/stmn/maven")
 ```
 Inside `dependencies`
 ```
-implementation "no.beiningbogen:StateMachine:1.0.1"
+implementation "no.beiningbogen:StateMachine:0.3.0"
 ```
 
 ## Usage 
 
 ```
-data class TestState(
-    val isLoading: Boolean = false,
-    val user: User? = null,
-    val error: TestError? = null,
-)
-
-sealed class TestEvent {
-    data class LoadUser(val id: String) : TestEvent()
-    data class DeleteUser(val id: String) : TestEvent()
-}
-
-class LoadUserName : Transition<TestState, TestEvent.LoadUser> {
-    override val isExecutable: (TestState) -> Boolean = { !it.isLoading }
-    override val execute: suspend TransitionUtils<TestState, TestEvent.LoadUser>.() -> Unit = {
-        emitNewState(currentState().copy(isLoading = true))
-        val user = loadUser(event.id)
-        emitNewState(
-            currentState().copy(
-                isLoading = false,
-                user = user
+**
+ * Create and initialize a state machine with a builder lambda.
+ */
+val stateMachine: StateMachine<CustomerScreenState, CustomerScreenEvents>
+ = createStateMachine(initialState, dispatcher) {
+        /**
+         * Register a predefined transition.
+         */
+        register(loadCustomerTransition)
+    
+        /**
+         * Register an anonymous transition here
+         */
+        register {
+            transition<CustomerScreenState, CustomerScreenEvents.ShowLoading>(
+                predicate = { !it.isLoading },
+                execution = { it.value = it.value.copy(isLoading = true) }
             )
-        )
+        }
+    
+        register {
+            transition<CustomerScreenState, CustomerScreenEvents.HideLoading>(
+                predicate = { it.isLoading },
+                execution = { it.value = it.value.copy(isLoading = false) }
+            )
+        }
     }
+...
+@Test
+fun shouldTransitionToCustomerLoadedState() = dispatcher.runBlockingTest {
+    val initialState = CustomerScreenState(isLoading = true)
+    stateMachine = createStateMachine(initialState, dispatcher, builder)
 
-    private fun loadUser(id: String): User {
-        // do whatever here with the id
-        return User(id = id, name = "John")
-    }
-}
+    stateMachine.state.test {
+        assertEquals(initialState, expectItem())
+        stateMachine.onEvent(CustomerScreenEvents.LoadCustomers)
 
-stateMachine = createStateMachine(initialState, dispatcher) {
-    /**
-     * Register a predefined transition.
-     */
-    register(LoadUserName())
+        val nextState = expectItem()
+        assertTrue(nextState.isLoading)
+        assertEquals(customers, nextState.customers)
+        assertNull(nextState.error)
 
-    /**
-     * Register an anonymous transition here
-     */
-    register {
-        transition<TestState, TestEvent.DeleteUser>(
-            predicate = { !it.isLoading },
-            execution = {
-                // do something with DeleteUser.id here
-            }
-        )
+        cancelAndIgnoreRemainingEvents()
     }
 }
 ```
