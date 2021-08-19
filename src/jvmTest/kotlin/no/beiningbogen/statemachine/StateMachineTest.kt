@@ -37,6 +37,7 @@ sealed class CustomerScreenEvents {
     object ShowLoading : CustomerScreenEvents()
     object HideLoading : CustomerScreenEvents()
     object LoadCustomers : CustomerScreenEvents()
+    data class LoadCustomerWithName(val name: String) : CustomerScreenEvents()
 }
 
 @ExperimentalTime
@@ -51,13 +52,30 @@ class StateMachineTest {
         Customer(id = 0, name = "John"),
         Customer(id = 1, name = "Emma"),
     )
+
     private val loadCustomerTransition = object : Transition<CustomerScreenState, CustomerScreenEvents.LoadCustomers> {
         override val isExecutable: (CustomerScreenState) -> Boolean = { it.isLoading }
-        override val execute: suspend (MutableStateFlow<CustomerScreenState>) -> Unit = {
-            // do some IO operation to load customers
-            it.value = it.value.copy(customers = customers)
-        }
+        override val execute: suspend (CustomerScreenEvents.LoadCustomers, MutableStateFlow<CustomerScreenState>) -> Unit =
+            { event, state ->
+                // do some IO operation to load customers
+                state.value = state.value.copy(customers = customers)
+            }
     }
+
+    private val loadCustomerWithNameTransition =
+        object : Transition<CustomerScreenState, CustomerScreenEvents.LoadCustomerWithName> {
+            override val isExecutable: (CustomerScreenState) -> Boolean = { it.isLoading }
+            override val execute: suspend (CustomerScreenEvents.LoadCustomerWithName, MutableStateFlow<CustomerScreenState>) -> Unit =
+                { event, state ->
+                    // do some IO operation to load customers
+                    state.value = state.value.copy(customers = loadWithFilter(event.name))
+                }
+
+            private fun loadWithFilter(name: String): List<Customer> {
+                // use the name value from the event to filter the search or whatever.
+                return listOf(Customer(id = 0, name = "John"))
+            }
+        }
 
     @Before
     fun setUp() {
@@ -70,6 +88,7 @@ class StateMachineTest {
              * Register a predefined transition.
              */
             register(loadCustomerTransition)
+            register(loadCustomerWithNameTransition)
 
             /**
              * Register an anonymous transition here
@@ -77,14 +96,18 @@ class StateMachineTest {
             register {
                 transition<CustomerScreenState, CustomerScreenEvents.ShowLoading>(
                     predicate = { !it.isLoading },
-                    execution = { it.value = it.value.copy(isLoading = true) }
+                    execution = { event, state ->
+                        state.value = state.value.copy(isLoading = true)
+                    }
                 )
             }
 
             register {
                 transition<CustomerScreenState, CustomerScreenEvents.HideLoading>(
                     predicate = { it.isLoading },
-                    execution = { it.value = it.value.copy(isLoading = false) }
+                    execution = { event, state ->
+                        state.value = state.value.copy(isLoading = false)
+                    }
                 )
             }
         }
@@ -125,6 +148,24 @@ class StateMachineTest {
             val nextState = expectItem()
             assertTrue(nextState.isLoading)
             assertEquals(customers, nextState.customers)
+            assertNull(nextState.error)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun shouldTransitionToFilteredCustomerLoadedState() = dispatcher.runBlockingTest {
+        val initialState = CustomerScreenState(isLoading = true)
+        stateMachine = createStateMachine(initialState, dispatcher, builder)
+
+        stateMachine.state.test {
+            assertEquals(initialState, expectItem())
+            stateMachine.onEvent(CustomerScreenEvents.LoadCustomerWithName("John"))
+
+            val nextState = expectItem()
+            assertTrue(nextState.isLoading)
+            assertEquals(listOf(Customer(id = 0, name = "John")), nextState.customers)
             assertNull(nextState.error)
 
             cancelAndIgnoreRemainingEvents()

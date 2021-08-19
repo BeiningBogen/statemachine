@@ -29,7 +29,7 @@ internal class StateMachineImpl<STATE, EVENT>(
 
         runningJob = coroutineScope.launch {
             if (transition.isExecutable(state.value)) {
-                transition.execute(_state)
+                transition.execute(event, _state)
             }
         }
     }

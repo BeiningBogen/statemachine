@@ -15,5 +15,5 @@ interface Transition<STATE, EVENT> {
      * A lambda executing the logic to transition the state machine from it's
      * current state to the next one.
      */
-    val execute: suspend (MutableStateFlow<STATE>) -> Unit
+    val execute: suspend (EVENT, MutableStateFlow<STATE>) -> Unit
 }
