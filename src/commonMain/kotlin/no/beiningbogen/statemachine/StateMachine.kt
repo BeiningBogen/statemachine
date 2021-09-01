@@ -1,12 +1,18 @@
 package no.beiningbogen.statemachine
 
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
-interface StateMachine<STATE, EVENT> {
+interface StateMachine<STATE, EVENT, SIDE_EFFECT> {
     /**
      * The state flow holding the state of the machine.
      */
     val state: StateFlow<STATE>
+
+    /**
+     * The state flow holding the state of the machine.
+     */
+    val sideEffects: Flow<SIDE_EFFECT>
 
     /**
      * Register a transition associated to an event name.
@@ -15,6 +21,14 @@ interface StateMachine<STATE, EVENT> {
      * @param transition: the transition to register.
      */
     fun register(eventName: String, transition: Transition<STATE, EVENT>)
+
+    /**
+     * Register a side effect transition associated to an event name.
+     * @param eventName: the name of the event that should trigger
+     * a specific transition.
+     * @param transition: the transition to register.
+     */
+    fun register(eventName: String, transition: SideEffectTransition<STATE, EVENT, SIDE_EFFECT>)
 
     /**
      * When called, the state machine will check if there are any registered

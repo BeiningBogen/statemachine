@@ -8,11 +8,11 @@ StateMachine let you create and register transitions for a specific state object
 
 Inside the `repositories` block from your `build.gradle` file : 
 ```
-maven { url = uri("https://maven.pkg.jetbrains.space/beiningbogen/p/stmn/maven") }
+maven { url = uri("https://maven.pkg.jetbrains.space/no.beiningbogen/p/stmn/maven") }
 ```
 Inside `dependencies`
 ```
-implementation "no.beiningbogen:StateMachine:0.3.0"
+implementation "no.no.beiningbogen:StateMachine:0.3.0"
 ```
 
 ## Usage 

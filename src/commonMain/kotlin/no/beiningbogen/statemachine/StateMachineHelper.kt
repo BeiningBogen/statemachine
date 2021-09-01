@@ -1,6 +1,7 @@
 package no.beiningbogen.statemachine
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.coroutines.CoroutineContext
 
@@ -11,12 +12,12 @@ import kotlin.coroutines.CoroutineContext
  * @param builder: the lambda for registering transitions in the state machine.
  */
 @ExperimentalCoroutinesApi
-fun <STATE, EVENT> createStateMachine(
+fun <STATE, EVENT, SIDE_EFFECT> createStateMachine(
     initialState: STATE,
     coroutineContext: CoroutineContext,
-    builder: StateMachine<STATE, EVENT>.() -> Unit
-): StateMachine<STATE, EVENT> {
-    return StateMachineImpl<STATE, EVENT>(initialState, coroutineContext)
+    builder: StateMachine<STATE, EVENT, SIDE_EFFECT>.() -> Unit
+): StateMachine<STATE, EVENT, SIDE_EFFECT> {
+    return StateMachineImpl<STATE, EVENT, SIDE_EFFECT>(initialState, coroutineContext)
         .apply { builder(this) }
 }
 
@@ -24,25 +25,43 @@ fun <STATE, EVENT> createStateMachine(
  * An extension function for registering a predefined transition without the need to pass its name.
  * @param transition: the transition to register.
  */
-inline fun <STATE, EVENT, reified T : EVENT> StateMachine<STATE, EVENT>.register(transition: Transition<STATE, T>) {
+inline fun <STATE, EVENT, reified T : EVENT, SIDE_EFFECT> StateMachine<STATE, EVENT, SIDE_EFFECT>.register(transition: Transition<STATE, T>) {
     val eventName = T::class.toString()
     register(eventName, transition as Transition<STATE, EVENT>)
+}
+
+/**
+ * An extension function for registering a predefined side effect transition without the need to pass its name.
+ * @param transition: the transition to register.
+ */
+inline fun <STATE, EVENT, reified T : EVENT, SIDE_EFFECT> StateMachine<STATE, EVENT, SIDE_EFFECT>.register(transition: SideEffectTransition<STATE, T, SIDE_EFFECT>) {
+    val eventName = T::class.toString()
+    register(eventName, transition as SideEffectTransition<STATE, EVENT, SIDE_EFFECT>)
 }
 
 /**
  * An extension function for registering an anonymous transition without the need to pass its name.
  * @param builder: the lambda constructing the transition, see [transition].
  */
-inline fun <STATE, EVENT, reified T : EVENT> StateMachine<STATE, EVENT>.register(builder: () -> Transition<STATE, T>) {
+inline fun <STATE, EVENT, reified T : EVENT, SIDE_EFFECT> StateMachine<STATE, EVENT, SIDE_EFFECT>.registerTransition(builder: () -> Transition<STATE, T>) {
     val eventName = T::class.toString()
     register(eventName, builder() as Transition<STATE, EVENT>)
+}
+
+/**
+ * An extension function for registering an anonymous side effect transition without the need to pass its name.
+ * @param builder: the lambda constructing the transition, see [transition].
+ */
+inline fun <STATE, EVENT, reified T : EVENT, SIDE_EFFECT> StateMachine<STATE, EVENT, SIDE_EFFECT>.registerSideEffect(builder: () -> SideEffectTransition<STATE, T, SIDE_EFFECT>) {
+    val eventName = T::class.toString()
+    register(eventName, builder() as SideEffectTransition<STATE, EVENT, SIDE_EFFECT>)
 }
 
 /**
  * A helper function returning an anonymous object implementing [Transition].
  * Use this function to avoid boilerplate and achieve a better readability.
  * @param predicate: the lambda used by the created transition for [Transition.isExecutable]
- * @param execution: the lambda used by the create transition for [Transition.execute]
+ * @param execution: the lambda used by the created transition for [Transition.execute]
  * @return a [Transition]
  */
 fun <STATE, EVENT> transition(
@@ -55,12 +74,28 @@ fun <STATE, EVENT> transition(
     }
 }
 
+/**
+ * A helper function returning an anonymous object implementing [SideEffectTransition].
+ * Use this function to avoid boilerplate and achieve a better readability.
+ * @param predicate: the lambda used by the created transition for [SideEffectTransition.isExecutable]
+ * @param execution: the lambda used by the created transition for [SideEffectTransition.execute]
+ * @return a [SideEffectTransition]
+ */
+fun <STATE, EVENT, SIDE_EFFECT> sideEffectTransition(
+    predicate: (STATE) -> Boolean,
+    execution: suspend (EVENT, MutableSharedFlow<SIDE_EFFECT>) -> Unit,
+): SideEffectTransition<STATE, EVENT, SIDE_EFFECT> {
+    return object : SideEffectTransition<STATE, EVENT, SIDE_EFFECT> {
+        override val isExecutable: (STATE) -> Boolean = predicate
+        override val execute: suspend (EVENT, MutableSharedFlow<SIDE_EFFECT>) -> Unit = execution
+    }
+}
 
 /**
- * An extension function for trigger a registered transition without the need to pass the event name.
- * @param builder: the transition to register.
+ * An extension function passing an event as an input for the state machine.
+ * @param event: the event acting as an input for the state machine.
  */
-inline fun <STATE, EVENT, reified T : EVENT> StateMachine<STATE, EVENT>.onEvent(event: T) {
+inline fun <STATE, EVENT, reified T : EVENT, SIDE_EFFECT> StateMachine<STATE, EVENT, SIDE_EFFECT>.onEvent(event: T) {
     val eventName = T::class.toString()
     onEvent(eventName, event)
 }

@@ -1,20 +1,11 @@
 plugins {
-    kotlin("multiplatform") version "1.5.0"
+    kotlin("multiplatform") version "1.5.30"
     id("maven-publish")
+    id("com.android.library")
 }
 
 group = "no.beiningbogen"
-version = "1.1.1"
-
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.5.0")
-    }
-}
+version = "1.2.1"
 
 repositories {
     google()
@@ -32,76 +23,54 @@ publishing {
 }
 
 kotlin {
-    jvm {
-        compilations.all {
-            kotlinOptions.jvmTarget = "1.8"
-        }
+    android {
+        publishLibraryVariants("release", "debug")
     }
-    js {
-        browser {
-            testTask {
-                useKarma {
-                    useChromeHeadless()
-                    webpackConfig.cssSupport.enabled = true
-                }
-            }
-        }
-    }
-
-    ios {
+    iosX64("ios") {
         binaries {
             framework {
-                baseName = "SharedCode"
+                baseName = "SharedModels"
             }
         }
     }
-
-    val hostOs = System.getProperty("os.name")
-    val isMingwX64 = hostOs.startsWith("Windows")
-    val nativeTarget = when {
-        hostOs == "Mac OS X" -> macosX64("native")
-        hostOs == "Linux" -> linuxX64("native")
-        isMingwX64 -> mingwX64("native")
-        else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
-    }
-
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.0-native-mt")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1-native-mt")
             }
         }
-        val commonTest by getting {
+        val commonTest by getting
+
+        val androidMain by getting
+        val androidTest by getting {
             dependencies {
-                implementation(kotlin("test-common"))
-                implementation(kotlin("test-annotations-common"))
-            }
-        }
-        val jvmMain by getting
-        val jvmTest by getting {
-            dependencies {
-                implementation(kotlin("test-junit"))
-                implementation(kotlin("test-junit"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.5.0")
-                implementation("org.mockito:mockito-inline:3.3.3")
-                implementation("androidx.arch.core:core-testing:2.1.0")
-                implementation("androidx.test:core:1.3.0")
-                implementation("androidx.test.ext:junit:1.1.2")
-                implementation("junit:junit:4.13.1")
-                implementation("app.cash.turbine:turbine:0.5.0")
-            }
-        }
-        val jsMain by getting
-        val jsTest by getting {
-            dependencies {
-                implementation(kotlin("test-js"))
+                implementation("app.cash.turbine:turbine:0.6.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.5.1")
+                implementation(kotlin("test"))
             }
         }
 
         val iosMain by getting
         val iosTest by getting
+    }
+}
 
-        val nativeMain by getting
-        val nativeTest by getting
+android {
+    compileSdkVersion(30)
+
+    sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
+    sourceSets.getByName("main") {
+        manifest.srcFile("src/androidMain/AndroidManifest.xml")
+        java.srcDirs("src/androidMain/kotlin")
+        res.srcDirs("src/androidMain/res")
+    }
+    sourceSets.getByName("test") {
+        java.srcDirs("src/androidTest/kotlin")
+        res.srcDirs("src/androidTest/res")
+    }
+
+    defaultConfig {
+        minSdkVersion(24)
+        targetSdkVersion(30)
     }
 }

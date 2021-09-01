@@ -2,16 +2,11 @@ package no.beiningbogen.statemachine
 
 import app.cash.turbine.test
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestCoroutineDispatcher
 import kotlinx.coroutines.test.runBlockingTest
-import org.junit.After
-import org.junit.Before
-import org.junit.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNull
-import kotlin.test.assertTrue
+import kotlin.test.*
 import kotlin.time.ExperimentalTime
 
 data class Customer(
@@ -38,14 +33,21 @@ sealed class CustomerScreenEvents {
     object HideLoading : CustomerScreenEvents()
     object LoadCustomers : CustomerScreenEvents()
     data class LoadCustomerWithName(val name: String) : CustomerScreenEvents()
+    data class CustomerSelected(val id: Int) : CustomerScreenEvents()
+    object ShowAboutApp : CustomerScreenEvents()
+}
+
+sealed class CustomerScreenSideEffect {
+    data class NavigateToCustomerDetails(val id: Int) : CustomerScreenSideEffect()
+    object ShowAboutApp : CustomerScreenSideEffect()
 }
 
 @ExperimentalTime
 @ExperimentalCoroutinesApi
 class StateMachineTest {
 
-    private lateinit var builder: StateMachine<CustomerScreenState, CustomerScreenEvents>.() -> Unit
-    private lateinit var stateMachine: StateMachine<CustomerScreenState, CustomerScreenEvents>
+    private lateinit var builder: StateMachine<CustomerScreenState, CustomerScreenEvents, CustomerScreenSideEffect>.() -> Unit
+    private lateinit var stateMachine: StateMachine<CustomerScreenState, CustomerScreenEvents, CustomerScreenSideEffect>
 
     private val dispatcher = TestCoroutineDispatcher()
     private val customers = listOf(
@@ -53,7 +55,8 @@ class StateMachineTest {
         Customer(id = 1, name = "Emma"),
     )
 
-    private val loadCustomerTransition = object : Transition<CustomerScreenState, CustomerScreenEvents.LoadCustomers> {
+    private val loadCustomerTransition = object :
+        Transition<CustomerScreenState, CustomerScreenEvents.LoadCustomers> {
         override val isExecutable: (CustomerScreenState) -> Boolean = { it.isLoading }
         override val execute: suspend (CustomerScreenEvents.LoadCustomers, MutableStateFlow<CustomerScreenState>) -> Unit =
             { event, state ->
@@ -77,7 +80,16 @@ class StateMachineTest {
             }
         }
 
-    @Before
+    private val customerSelectedSideEffectTransition = object :
+        SideEffectTransition<CustomerScreenState, CustomerScreenEvents.CustomerSelected, CustomerScreenSideEffect> {
+        override val isExecutable: (CustomerScreenState) -> Boolean = { !it.isLoading }
+        override val execute: suspend (CustomerScreenEvents.CustomerSelected, MutableSharedFlow<CustomerScreenSideEffect>) -> Unit =
+            { event, sideEffect ->
+                sideEffect.emit(CustomerScreenSideEffect.NavigateToCustomerDetails(event.id))
+            }
+    }
+
+    @BeforeTest
     fun setUp() {
         /**
          * Create and initialize a state machine with a builder lambda.
@@ -89,11 +101,12 @@ class StateMachineTest {
              */
             register(loadCustomerTransition)
             register(loadCustomerWithNameTransition)
+            register(customerSelectedSideEffectTransition)
 
             /**
              * Register an anonymous transition here
              */
-            register {
+            registerTransition {
                 transition<CustomerScreenState, CustomerScreenEvents.ShowLoading>(
                     predicate = { !it.isLoading },
                     execution = { event, state ->
@@ -102,7 +115,7 @@ class StateMachineTest {
                 )
             }
 
-            register {
+            registerTransition {
                 transition<CustomerScreenState, CustomerScreenEvents.HideLoading>(
                     predicate = { it.isLoading },
                     execution = { event, state ->
@@ -110,10 +123,19 @@ class StateMachineTest {
                     }
                 )
             }
+
+            registerSideEffect {
+                sideEffectTransition<CustomerScreenState, CustomerScreenEvents.ShowAboutApp, CustomerScreenSideEffect>(
+                    predicate = { !it.isLoading },
+                    execution = { event, sideEffect ->
+                        sideEffect.emit(CustomerScreenSideEffect.ShowAboutApp)
+                    }
+                )
+            }
         }
     }
 
-    @After
+    @AfterTest
     fun cleanUp() {
         stateMachine.destroy()
     }
@@ -124,10 +146,10 @@ class StateMachineTest {
         stateMachine = createStateMachine(initialState, dispatcher, builder)
 
         stateMachine.state.test {
-            assertEquals(initialState, expectItem())
+            assertEquals(initialState, awaitItem())
             stateMachine.onEvent(CustomerScreenEvents.ShowLoading)
 
-            val nextState = expectItem()
+            val nextState = awaitItem()
             assertTrue(nextState.isLoading)
             assertTrue(nextState.customers.isEmpty())
             assertNull(nextState.error)
@@ -142,10 +164,10 @@ class StateMachineTest {
         stateMachine = createStateMachine(initialState, dispatcher, builder)
 
         stateMachine.state.test {
-            assertEquals(initialState, expectItem())
+            assertEquals(initialState, awaitItem())
             stateMachine.onEvent(CustomerScreenEvents.LoadCustomers)
 
-            val nextState = expectItem()
+            val nextState = awaitItem()
             assertTrue(nextState.isLoading)
             assertEquals(customers, nextState.customers)
             assertNull(nextState.error)
@@ -160,10 +182,10 @@ class StateMachineTest {
         stateMachine = createStateMachine(initialState, dispatcher, builder)
 
         stateMachine.state.test {
-            assertEquals(initialState, expectItem())
+            assertEquals(initialState, awaitItem())
             stateMachine.onEvent(CustomerScreenEvents.LoadCustomerWithName("John"))
 
-            val nextState = expectItem()
+            val nextState = awaitItem()
             assertTrue(nextState.isLoading)
             assertEquals(listOf(Customer(id = 0, name = "John")), nextState.customers)
             assertNull(nextState.error)
@@ -178,15 +200,52 @@ class StateMachineTest {
         stateMachine = createStateMachine(initialState, dispatcher, builder)
 
         stateMachine.state.test {
-            assertEquals(initialState, expectItem())
+            assertEquals(initialState, awaitItem())
             stateMachine.onEvent(CustomerScreenEvents.HideLoading)
 
-            val nextState = expectItem()
+            val nextState = awaitItem()
             assertFalse(nextState.isLoading)
             assertEquals(customers, nextState.customers)
             assertNull(nextState.error)
 
             cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun shouldTriggerNavigateToCustomerDetailsSideEffect() = dispatcher.runBlockingTest {
+        val initialState = CustomerScreenState()
+        stateMachine = createStateMachine(initialState, dispatcher, builder)
+
+        stateMachine.state.test {
+            assertEquals(initialState, awaitItem())
+            assertTrue(cancelAndConsumeRemainingEvents().isEmpty())
+        }
+
+        stateMachine.sideEffects.test {
+            stateMachine.onEvent(CustomerScreenEvents.CustomerSelected(1))
+
+            val nextSideEffect = awaitItem()
+            assertTrue {
+                nextSideEffect is CustomerScreenSideEffect.NavigateToCustomerDetails &&
+                        nextSideEffect.id == 1
+            }
+        }
+    }
+
+    @Test
+    fun shouldTriggerShowAboutAppSideEffect() = dispatcher.runBlockingTest {
+        val initialState = CustomerScreenState()
+        stateMachine = createStateMachine(initialState, dispatcher, builder)
+
+        stateMachine.state.test {
+            assertEquals(initialState, awaitItem())
+            assertTrue(cancelAndConsumeRemainingEvents().isEmpty())
+        }
+
+        stateMachine.sideEffects.test {
+            stateMachine.onEvent(CustomerScreenEvents.ShowAboutApp)
+            assertTrue(awaitItem() is CustomerScreenSideEffect.ShowAboutApp)
         }
     }
 }

@@ -1,8 +1,8 @@
 package no.beiningbogen.statemachine
 
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 
-interface Transition<STATE, EVENT> {
+interface SideEffectTransition<STATE, EVENT, SIDE_EFFECT> {
     /**
      * A lambda used to determine if the transition should be executed or not.
      * It has a state parameter as input, it should be the current state of the
@@ -12,8 +12,7 @@ interface Transition<STATE, EVENT> {
     val isExecutable: (STATE) -> Boolean
 
     /**
-     * A lambda executing the logic to transition the state machine from its
-     * current state to the next one.
+     * A lambda executing the logic to trigger the desired side effect.
      */
-    val execute: suspend (EVENT, MutableStateFlow<STATE>) -> Unit
+    val execute: suspend (EVENT, MutableSharedFlow<SIDE_EFFECT>) -> Unit
 }
