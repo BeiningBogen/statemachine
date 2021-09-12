@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "no.beiningbogen"
-version = "1.2.2"
+version = "1.3.0"
 
 repositories {
     google()
@@ -23,6 +23,8 @@ publishing {
 }
 
 kotlin {
+    jvm()
+
     android {
         publishLibraryVariants("release", "debug")
     }
@@ -36,7 +38,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2")
             }
         }
         val commonTest by getting
@@ -45,7 +47,7 @@ kotlin {
         val androidTest by getting {
             dependencies {
                 implementation("app.cash.turbine:turbine:0.6.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.5.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.5.2")
                 implementation(kotlin("test"))
             }
         }
