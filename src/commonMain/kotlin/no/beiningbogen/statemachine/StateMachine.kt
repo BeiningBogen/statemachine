@@ -28,7 +28,7 @@ interface StateMachine<STATE, EVENT, SIDE_EFFECT> {
      * a specific transition.
      * @param transition: the transition to register.
      */
-    fun register(eventName: String, transition: SideEffectTransition<STATE, EVENT, SIDE_EFFECT>)
+    fun register(eventName: String, transition: TransitionWithSideEffect<STATE, EVENT, SIDE_EFFECT>)
 
     /**
      * When called, the state machine will check if there are any registered

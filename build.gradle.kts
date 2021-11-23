@@ -1,11 +1,11 @@
 plugins {
-    kotlin("multiplatform") version "1.5.30"
+    kotlin("multiplatform") version "1.5.31"
     id("maven-publish")
     id("com.android.library")
 }
 
 group = "no.beiningbogen"
-version = "1.3.0"
+version = "1.4.0"
 
 repositories {
     google()
@@ -38,27 +38,39 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.2-native-mt")
             }
         }
-        val commonTest by getting
+        val commonTest by getting {
+            dependencies {
+                implementation(kotlin("test-common"))
+                implementation(kotlin("test-annotations-common"))
+                implementation("app.cash.turbine:turbine:0.6.0")
+            }
+        }
 
         val androidMain by getting
         val androidTest by getting {
             dependencies {
-                implementation("app.cash.turbine:turbine:0.6.0")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.5.2")
                 implementation(kotlin("test"))
+                implementation("junit:junit:4.13.2")
             }
         }
 
         val iosMain by getting
         val iosTest by getting
+
+        val jvmMain by getting
+        val jvmTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
     }
 }
 
 android {
-    compileSdkVersion(30)
+    compileSdkVersion(31)
 
     sourceSets["main"].manifest.srcFile("src/androidMain/AndroidManifest.xml")
     sourceSets.getByName("main") {
@@ -73,6 +85,6 @@ android {
 
     defaultConfig {
         minSdkVersion(24)
-        targetSdkVersion(30)
+        targetSdkVersion(31)
     }
 }

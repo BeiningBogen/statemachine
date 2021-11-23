@@ -23,14 +23,14 @@ internal class StateMachineImpl<STATE, EVENT, SIDE_EFFECT>(
     override val sideEffects: Flow<SIDE_EFFECT> = _sideEffect
 
     internal val transitions = mutableMapOf<String, Transition<STATE, EVENT>>()
-    internal val sideEffectTransitions = mutableMapOf<String, SideEffectTransition<STATE, EVENT, SIDE_EFFECT>>()
+    internal val transitionsWithSideEffect = mutableMapOf<String, TransitionWithSideEffect<STATE, EVENT, SIDE_EFFECT>>()
 
     override fun register(eventName: String, transition: Transition<STATE, EVENT>) {
         transitions[eventName] = transition
     }
 
-    override fun register(eventName: String, transition: SideEffectTransition<STATE, EVENT, SIDE_EFFECT>) {
-        sideEffectTransitions[eventName] = transition
+    override fun register(eventName: String, transition: TransitionWithSideEffect<STATE, EVENT, SIDE_EFFECT>) {
+        transitionsWithSideEffect[eventName] = transition
     }
 
     override fun <T : EVENT> onEvent(eventName: String, event: T) {
@@ -70,8 +70,8 @@ private fun <STATE, EVENT, SIDE_EFFECT> StateMachineImpl<STATE, EVENT, SIDE_EFFE
 
 private fun <STATE, EVENT, SIDE_EFFECT> StateMachineImpl<STATE, EVENT, SIDE_EFFECT>.findSideEffectTransition(
     eventName: String
-): SideEffectTransition<STATE, EVENT, SIDE_EFFECT>? {
-    return sideEffectTransitions.filter { it.key == eventName }
+): TransitionWithSideEffect<STATE, EVENT, SIDE_EFFECT>? {
+    return transitionsWithSideEffect.filter { it.key == eventName }
         .map { it.value }
         .firstOrNull()
 }
